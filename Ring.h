@@ -46,8 +46,9 @@ class RingManager
 private:
     std::vector<std::unique_ptr<Ring>> m_rings;
     std::mt19937 m_randomGen;
-    std::uniform_int_distribution<int> m_colorDist;
     std::vector<sf::Color> m_colors;
+    sf::Color m_currentColor;
+    int m_currentColorIndex;
 
 public:
     RingManager();
@@ -56,5 +57,10 @@ public:
     void draw(sf::RenderWindow& window) const;
     void clear();
     size_t getRingCount() const;
-    void addRandomRing(const sf::Vector2u& windowSize);
+    //void addRandomRing(const sf::Vector2u& windowSize);
+
+    // New methods for color management
+    void cycleToNextColor();
+    sf::Color getCurrentColor() const;
+    std::string getCurrentColorString() const;
 };

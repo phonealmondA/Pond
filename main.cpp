@@ -19,9 +19,10 @@ int main()
 
     std::cout << "Controls:" << std::endl;
     std::cout << "- Left click: Create ring at cursor position" << std::endl;
-    std::cout << "- Right click: Create random ring" << std::endl;
+    std::cout << "- Right click: Change ring color" << std::endl;
     std::cout << "- Space: Clear all rings" << std::endl;
     std::cout << "- Escape: Exit" << std::endl;
+    std::cout << "Current color: " << ringManager.getCurrentColorString() << std::endl;
 
     // Main game loop
     while (window.isOpen())
@@ -44,13 +45,14 @@ int main()
                     // Create ring at click position
                     ringManager.addRing(sf::Vector2f(static_cast<float>(clickPos.x),
                         static_cast<float>(clickPos.y)));
-                    std::cout << "Ring created at (" << clickPos.x << ", " << clickPos.y << ")" << std::endl;
+                    std::cout << "Ring created at (" << clickPos.x << ", " << clickPos.y << ") with color: "
+                        << ringManager.getCurrentColorString() << std::endl;
                 }
                 else if (mouseClick->button == sf::Mouse::Button::Right)
                 {
-                    // Create random ring
-                    ringManager.addRandomRing(window.getSize());
-                    std::cout << "Random ring created" << std::endl;
+                    // Cycle to next color
+                    ringManager.cycleToNextColor();
+                    std::cout << "Color changed to: " << ringManager.getCurrentColorString() << std::endl;
                 }
             }
             else if (auto keyPress = event->getIf<sf::Event::KeyPressed>())
@@ -67,12 +69,13 @@ int main()
             }
         }
 
-        // Auto-spawn rings occasionally (every 3 seconds if less than 5 rings)
-        if (autoSpawnClock.getElapsedTime().asSeconds() > 3.0f && ringManager.getRingCount() < 5)
-        {
-            ringManager.addRandomRing(window.getSize());
-            autoSpawnClock.restart();
-        }
+        //// Auto-spawn rings occasionally (every 3 seconds if less than 5 rings)
+        //if (autoSpawnClock.getElapsedTime().asSeconds() > 3.0f && ringManager.getRingCount() < 5)
+        //{
+        //    ringManager.addRandomRing(window.getSize());
+        //    std::cout << "Auto-spawned ring with color: " << ringManager.getCurrentColorString() << std::endl;
+        //    autoSpawnClock.restart();
+        //}
 
         // Update all rings
         ringManager.update(deltaTime, window.getSize());

@@ -1,6 +1,7 @@
 #include "Ring.h"
 #include <iostream>
 #include <algorithm>
+#include <sstream>
 
 // Ring class implementation
 Ring::Ring(sf::Vector2f center, sf::Color color, float growthSpeed, float thickness)
@@ -93,7 +94,7 @@ void Ring::reset(sf::Vector2f newCenter)
 
 // RingManager class implementation
 RingManager::RingManager()
-    : m_randomGen(std::random_device{}()), m_colorDist(0, 9)
+    : m_randomGen(std::random_device{}()), m_currentColorIndex(0)
 {
     // Initialize predefined colors for rings
     m_colors = {
@@ -102,14 +103,19 @@ RingManager::RingManager()
         sf::Color(255, 165, 0),   // Orange
         sf::Color(128, 0, 128),   // Purple
         sf::Color(255, 192, 203), // Pink
-        sf::Color(0, 255, 127)    // Spring Green
+        sf::Color(0, 255, 127),   // Spring Green
+        sf::Color::White,         // White
+        sf::Color::Black          // Black
     };
+
+    // Set initial color
+    m_currentColor = m_colors[m_currentColorIndex];
 }
 
 void RingManager::addRing(sf::Vector2f position)
 {
-    sf::Color randomColor = m_colors[m_colorDist(m_randomGen)];
-    m_rings.push_back(std::make_unique<Ring>(position, randomColor));
+    // Use the current color instead of random
+    m_rings.push_back(std::make_unique<Ring>(position, m_currentColor));
 }
 
 void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
@@ -147,13 +153,33 @@ size_t RingManager::getRingCount() const
 {
     return m_rings.size();
 }
+//
+//void RingManager::addRandomRing(const sf::Vector2u& windowSize)
+//{
+//    std::uniform_int_distribution<int> xDist(50, static_cast<int>(windowSize.x) - 50);
+//    std::uniform_int_distribution<int> yDist(50, static_cast<int>(windowSize.y) - 50);
+//
+//    sf::Vector2f randomPos(static_cast<float>(xDist(m_randomGen)),
+//        static_cast<float>(yDist(m_randomGen)));
+//    addRing(randomPos);
+//}
 
-void RingManager::addRandomRing(const sf::Vector2u& windowSize)
+void RingManager::cycleToNextColor()
 {
-    std::uniform_int_distribution<int> xDist(50, static_cast<int>(windowSize.x) - 50);
-    std::uniform_int_distribution<int> yDist(50, static_cast<int>(windowSize.y) - 50);
+    m_currentColorIndex = (m_currentColorIndex + 1) % m_colors.size();
+    m_currentColor = m_colors[m_currentColorIndex];
+}
 
-    sf::Vector2f randomPos(static_cast<float>(xDist(m_randomGen)),
-        static_cast<float>(yDist(m_randomGen)));
-    addRing(randomPos);
+sf::Color RingManager::getCurrentColor() const
+{
+    return m_currentColor;
+}
+
+std::string RingManager::getCurrentColorString() const
+{
+    std::ostringstream oss;
+    oss << "RGB(" << static_cast<int>(m_currentColor.r) << ", "
+        << static_cast<int>(m_currentColor.g) << ", "
+        << static_cast<int>(m_currentColor.b) << ")";
+    return oss.str();
 }
