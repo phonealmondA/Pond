@@ -1,0 +1,126 @@
+#pragma once
+#include <SFML/Graphics.hpp>
+#include <vector>
+#include <memory>
+#include <unordered_set>
+#include <string>
+
+class Ring; // Forward declaration
+
+// Structure to represent any ring shape (main ring or bounce reflection)
+struct RingShape
+{
+    sf::Vector2f center;
+    float radius;
+    sf::Color color;
+    const Ring* sourceRing;
+    int bounceIndex; // -1 for main ring, 0+ for bounce shapes
+
+    // Default constructor
+    RingShape() : center(0.f, 0.f), radius(0.f), color(sf::Color::White), sourceRing(nullptr), bounceIndex(-1) {}
+
+    // Parameterized constructor
+    RingShape(sf::Vector2f c, float r, sf::Color col, const Ring* ring, int idx = -1)
+        : center(c), radius(r), color(col), sourceRing(ring), bounceIndex(idx) {
+    }
+
+    // Equality operator for tracking
+    bool operator==(const RingShape& other) const {
+        return sourceRing == other.sourceRing && bounceIndex == other.bounceIndex;
+    }
+};
+
+// Path-following atom that moves along intersection points
+class PathFollowingAtom
+{
+private:
+    sf::CircleShape m_shape;
+    sf::Vector2f m_currentPosition;
+    sf::Vector2f m_previousPosition;
+    sf::Color m_color;
+    float m_radius;
+    float m_energy;
+    float m_lifetime;
+    float m_maxLifetime;
+    bool m_isAlive;
+
+    // Visual effects
+    float m_pulseTimer;
+    float m_fadeStartTime;
+
+    // Track which two shapes this atom follows
+    RingShape m_shape1;
+    RingShape m_shape2;
+    bool m_hasValidShapes;
+
+public:
+    PathFollowingAtom(const RingShape& shape1, const RingShape& shape2, sf::Vector2f initialPosition);
+
+    // Update position based on current intersection of tracked shapes
+    void update(float deltaTime, const std::vector<RingShape>& allCurrentShapes);
+    void draw(sf::RenderWindow& window) const;
+
+    bool isAlive() const { return m_isAlive && m_hasValidShapes; }
+    float getLifetime() const { return m_lifetime; }
+    sf::Vector2f getPosition() const { return m_currentPosition; }
+    float getEnergy() const { return m_energy; }
+
+    // Check if this atom is tracking the given shape pair
+    bool isTrackingShapes(const RingShape& shape1, const RingShape& shape2) const;
+
+    // Static utility methods for interference calculations
+    static sf::Color calculateInterferenceColor(const sf::Color& color1, const sf::Color& color2);
+    static float calculateInterferenceEnergy(const sf::Color& color1, const sf::Color& color2);
+    static bool shouldCreateInterference(const sf::Color& color1, const sf::Color& color2);
+
+private:
+    // Find current versions of tracked shapes in the current shape list
+    bool findCurrentShapes(const std::vector<RingShape>& allCurrentShapes, RingShape& currentShape1, RingShape& currentShape2);
+
+    // Calculate intersection point between two circles
+    sf::Vector2f calculateIntersectionPoint(const RingShape& shape1, const RingShape& shape2);
+
+    // Check if two circles intersect
+    bool circlesIntersect(const RingShape& shape1, const RingShape& shape2);
+};
+
+// Global atom manager with FIFO system and path-following atoms
+class AtomManager
+{
+private:
+    static const size_t MAX_ATOMS = 300;
+
+    std::vector<std::unique_ptr<PathFollowingAtom>> m_atoms;
+    size_t m_nextSlot; // FIFO insertion point
+    size_t m_atomCount;
+
+    // Intersection tracking to prevent duplicate atoms for same shape pairs
+    std::unordered_set<std::string> m_trackedIntersections;
+
+    // Helper methods
+    std::string createIntersectionKey(const RingShape& shape1, const RingShape& shape2) const;
+    void cleanupIntersectionTracking(const std::vector<RingShape>& allShapes);
+
+public:
+    AtomManager();
+
+    // Main update method - detects intersections and creates/updates atoms
+    void update(float deltaTime, const std::vector<Ring*>& rings);
+
+    // Draw all atoms
+    void draw(sf::RenderWindow& window) const;
+
+    // Management methods
+    void clear();
+    size_t getAtomCount() const { return m_atomCount; }
+    size_t getMaxAtoms() const { return MAX_ATOMS; }
+
+private:
+    // Intersection detection methods
+    void detectNewIntersections(const std::vector<RingShape>& allShapes);
+    std::vector<RingShape> getAllShapes(const std::vector<Ring*>& rings) const;
+    void checkShapePairForNewIntersection(const RingShape& shape1, const RingShape& shape2);
+
+    // Add new path-following atom
+    void addPathFollowingAtom(const RingShape& shape1, const RingShape& shape2, sf::Vector2f intersectionPoint);
+};

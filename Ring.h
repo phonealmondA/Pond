@@ -3,8 +3,6 @@
 #include <vector>
 #include <memory>
 #include <random>
-#include <array>
-#include "IntersectionPath.h"
 
 class Ring
 {
@@ -29,23 +27,15 @@ private:
     BounceData m_bounceData;
     std::vector<sf::CircleShape> m_bounceShapes; // Additional shapes for bounce reflections
 
-    // Intersection path management (max 6 paths per ring)
-    std::array<IntersectionPath, 6> m_intersectionPaths;
-    int m_activePathCount;
-
     // Helper methods for bouncing
     void updateBounceShapes(const sf::Vector2u& windowSize);
     void createBounceShape(sf::Vector2f center, sf::Color color);
 
-    // Intersection path methods
-    void updateIntersectionPaths(float deltaTime);
-    void checkForNewIntersections(const Ring& otherRing);
-
 public:
-    // Calculate growth speed based on color frequency (made public for RingManager)
+    // Calculate growth speed based on color frequency (made public for external use)
     static float calculateFrequencyBasedSpeed(const sf::Color& color);
 
-    // Constructor - now calculates speed based on color frequency
+    // Constructor - calculates speed based on color frequency
     Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float thickness = 3.f);
 
     // Update the ring (growth and bouncing)
@@ -74,6 +64,10 @@ public:
 
     // Reset ring to new position
     void reset(sf::Vector2f newCenter);
+
+    // Methods for accessing bounce shapes (needed for intersection detection)
+    sf::Vector2f getBounceShapeCenter(int index) const;
+    int getBounceShapeCount() const;
 };
 
 class RingManager
@@ -85,9 +79,6 @@ private:
     sf::Color m_currentColor;
     int m_currentColorIndex;
 
-    // Intersection management between rings
-    void detectAndCreateIntersectionPaths();
-
 public:
     RingManager();
     void addRing(sf::Vector2f position);
@@ -95,6 +86,9 @@ public:
     void draw(sf::RenderWindow& window) const;
     void clear();
     size_t getRingCount() const;
+
+    // Get all rings for intersection detection
+    std::vector<Ring*> getAllRings() const;
 
     // Color management methods
     void cycleToNextColor();

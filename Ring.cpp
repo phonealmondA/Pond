@@ -1,5 +1,4 @@
 #include "Ring.h"
-#include "IntersectionPath.h"
 #include <iostream>
 #include <algorithm>
 #include <sstream>
@@ -24,7 +23,7 @@ float Ring::calculateFrequencyBasedSpeed(const sf::Color& color)
 // Ring class implementation with bouncing and frequency-based speed
 Ring::Ring(sf::Vector2f center, sf::Color color, float thickness)
     : m_center(center), m_originalCenter(center), m_currentRadius(5.f),
-    m_color(color), m_isAlive(true), m_thickness(thickness), m_activePathCount(0)
+    m_color(color), m_isAlive(true), m_thickness(thickness)
 {
     // Calculate growth speed based on color frequency
     m_growthSpeed = calculateFrequencyBasedSpeed(color);
@@ -37,9 +36,6 @@ Ring::Ring(sf::Vector2f center, sf::Color color, float thickness)
 
     // Position the shape (SFML positions are top-left corner)
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
-
-    // Initialize intersection paths (they start inactive)
-    // No need to explicitly initialize as IntersectionPath constructor handles it
 }
 
 void Ring::createBounceShape(sf::Vector2f center, sf::Color color)
@@ -166,9 +162,6 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     // Update bounce shapes and reflections
     updateBounceShapes(windowSize);
 
-    // Update intersection paths
-    updateIntersectionPaths(deltaTime);
-
     // Optional: Kill ring when it gets too large (prevents infinite growth)
     if (m_currentRadius > 2000.f) // Adjust this value as needed
     {
@@ -196,12 +189,6 @@ void Ring::draw(sf::RenderWindow& window) const
         for (const auto& bounceShape : m_bounceShapes)
         {
             window.draw(bounceShape);
-        }
-
-        // Draw intersection paths (atoms)
-        for (const auto& path : m_intersectionPaths)
-        {
-            path.draw(window);
         }
     }
 }
@@ -248,13 +235,6 @@ void Ring::reset(sf::Vector2f newCenter)
     m_bounceData = BounceData(); // Reset bounce data
     m_bounceShapes.clear();
 
-    // Reset intersection paths
-    for (auto& path : m_intersectionPaths)
-    {
-        path.deactivate();
-    }
-    m_activePathCount = 0;
-
     m_shape.setRadius(m_currentRadius);
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
     m_shape.setOutlineColor(m_color); // Reset to full opacity
@@ -263,18 +243,7 @@ void Ring::reset(sf::Vector2f newCenter)
     m_growthSpeed = calculateFrequencyBasedSpeed(m_color);
 }
 
-// New intersection path methods
-void Ring::updateIntersectionPaths(float deltaTime)
-{
-    for (auto& path : m_intersectionPaths)
-    {
-        if (path.isActive())
-        {
-            path.update(deltaTime);
-        }
-    }
-}
-
+// Methods for accessing bounce shapes
 sf::Vector2f Ring::getBounceShapeCenter(int index) const
 {
     if (index == -1)
@@ -298,92 +267,47 @@ int Ring::getBounceShapeCount() const
     return static_cast<int>(m_bounceShapes.size());
 }
 
-void Ring::tryCreateIntersectionPath(const Ring& otherRing)
-{
-    // Only create paths if we have available slots
-    if (m_activePathCount >= 6) return;
-
-    // Try to create intersection paths between our reflections and other ring's reflections
-    // Priority: main ring vs bounce shapes, then bounce vs bounce
-
-    // Check main ring vs other's bounce shapes
-    for (int otherIndex = 0; otherIndex < otherRing.getBounceShapeCount() && m_activePathCount < 6; ++otherIndex)
-    {
-        // Find an inactive path slot
-        for (int pathIndex = 0; pathIndex < 6; ++pathIndex)
-        {
-            if (!m_intersectionPaths[pathIndex].isActive())
-            {
-                m_intersectionPaths[pathIndex].initialize(this, -1, &otherRing, otherIndex);
-                if (m_intersectionPaths[pathIndex].isActive())
-                {
-                    m_activePathCount++;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Check our bounce shapes vs other's main ring
-    for (int myIndex = 0; myIndex < getBounceShapeCount() && m_activePathCount < 6; ++myIndex)
-    {
-        for (int pathIndex = 0; pathIndex < 6; ++pathIndex)
-        {
-            if (!m_intersectionPaths[pathIndex].isActive())
-            {
-                m_intersectionPaths[pathIndex].initialize(this, myIndex, &otherRing, -1);
-                if (m_intersectionPaths[pathIndex].isActive())
-                {
-                    m_activePathCount++;
-                    break;
-                }
-            }
-        }
-    }
-}
-
 // RingManager class implementation
 RingManager::RingManager()
     : m_randomGen(std::random_device{}()), m_currentColorIndex(0)
 {
-
     // Initialize predefined colors for rings (ordered from lowest to highest frequency/speed)
     m_colors = {
-    sf::Color(44, 0, 0),      // Darkest red - slowest
-    sf::Color(84, 0, 0),      // Very dark red - extremely slow
-    sf::Color(108, 0, 0),     // Very dark red - extremely slow
-    sf::Color(138, 0, 0),     // Dark red - very slow  
-    sf::Color(162, 0, 0),     // Dark red - very slow  
-    sf::Color(182, 0, 0),     // Dark red - very slow  
-    sf::Color(192, 0, 0),     // Dark red - very slow  
-    sf::Color(212, 0, 0),     // Medium-dark red - slow
-    sf::Color(255, 0, 0),     // Red - pure red
-    sf::Color(255, 42, 0),    // Red + small green
-    sf::Color(255, 84, 0),    // Red + more green (orange-ish)
-    sf::Color(255, 128, 0),   // Red + medium green (orange)
-    sf::Color(255, 165, 0),   // Orange
-    sf::Color(255, 200, 0),   // Yellow-orange
-    sf::Color(255, 255, 0),   // Yellow
-    sf::Color(200, 255, 0),   // Yellow-green
-    sf::Color(128, 255, 0),   // Lime green
-    sf::Color(0, 255, 0),     // Green
-    sf::Color(0, 255, 84),    // Green + small blue
-    sf::Color(0, 255, 128),   // Green + more blue (spring green)
-    sf::Color(0, 255, 200),   // Green + high blue (cyan-ish)
-    sf::Color(0, 255, 255),   // Cyan
-    sf::Color(0, 200, 255),   // Sky blue
-    sf::Color(0, 128, 255),   // Light blue
-    sf::Color(0, 84, 255),    // Blue + small green
-    sf::Color(0, 0, 255),     // Blue
-    sf::Color(84, 0, 255),    // Blue + small red (purple)
-    sf::Color(128, 0, 255),   // Purple
-    sf::Color(200, 0, 255),   // Magenta-purple
-    sf::Color(255, 0, 255),   // Magenta
-    sf::Color(255, 0, 200),   // Pink-magenta
-    sf::Color(255, 84, 255),  // Light magenta
-    sf::Color(255, 128, 255), // Light pink
-    sf::Color(255, 200, 255), // Very light pink
-    sf::Color(255, 255, 255)  // White - fastest
+        sf::Color(44, 0, 0),      // Darkest red - slowest
+        sf::Color(84, 0, 0),      // Very dark red - extremely slow
+        sf::Color(108, 0, 0),     // Very dark red - extremely slow
+        sf::Color(138, 0, 0),     // Dark red - very slow  
+        sf::Color(162, 0, 0),     // Dark red - very slow  
+        sf::Color(182, 0, 0),     // Dark red - very slow  
+        sf::Color(192, 0, 0),     // Dark red - very slow  
+        sf::Color(212, 0, 0),     // Medium-dark red - slow
+        sf::Color(255, 0, 0),     // Red - pure red
+        sf::Color(255, 42, 0),    // Red + small green
+        sf::Color(255, 84, 0),    // Red + more green (orange-ish)
+        sf::Color(255, 128, 0),   // Red + medium green (orange)
+        sf::Color(255, 165, 0),   // Orange
+        sf::Color(255, 200, 0),   // Yellow-orange
+        sf::Color(255, 255, 0),   // Yellow
+        sf::Color(200, 255, 0),   // Yellow-green
+        sf::Color(128, 255, 0),   // Lime green
+        sf::Color(0, 255, 0),     // Green
+        sf::Color(0, 255, 84),    // Green + small blue
+        sf::Color(0, 255, 128),   // Green + more blue (spring green)
+        sf::Color(0, 255, 200),   // Green + high blue (cyan-ish)
+        sf::Color(0, 255, 255),   // Cyan
+        sf::Color(0, 200, 255),   // Sky blue
+        sf::Color(0, 128, 255),   // Light blue
+        sf::Color(0, 84, 255),    // Blue + small green
+        sf::Color(0, 0, 255),     // Blue
+        sf::Color(84, 0, 255),    // Blue + small red (purple)
+        sf::Color(128, 0, 255),   // Purple
+        sf::Color(200, 0, 255),   // Magenta-purple
+        sf::Color(255, 0, 255),   // Magenta
+        sf::Color(255, 0, 200),   // Pink-magenta
+        sf::Color(255, 84, 255),  // Light magenta
+        sf::Color(255, 128, 255), // Light pink
+        sf::Color(255, 200, 255), // Very light pink
+        sf::Color(255, 255, 255)  // White - fastest
     };
 
     m_currentColor = m_colors[m_currentColorIndex];
@@ -394,25 +318,6 @@ void RingManager::addRing(sf::Vector2f position)
     m_rings.push_back(std::make_unique<Ring>(position, m_currentColor));
 }
 
-void RingManager::detectAndCreateIntersectionPaths()
-{
-    // Check intersections between all ring pairs for intersection path creation
-    for (size_t i = 0; i < m_rings.size(); ++i)
-    {
-        for (size_t j = i + 1; j < m_rings.size(); ++j)
-        {
-            Ring* ring1 = m_rings[i].get();
-            Ring* ring2 = m_rings[j].get();
-
-            if (!ring1->isAlive() || !ring2->isAlive()) continue;
-
-            // Try to create intersection paths between these rings
-            ring1->tryCreateIntersectionPath(*ring2);
-            ring2->tryCreateIntersectionPath(*ring1);
-        }
-    }
-}
-
 void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
 {
     // Update all rings
@@ -420,9 +325,6 @@ void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
     {
         ring->update(deltaTime, windowSize);
     }
-
-    // Detect and create intersection paths between rings
-    detectAndCreateIntersectionPaths();
 
     // Remove dead rings
     m_rings.erase(
@@ -436,7 +338,7 @@ void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
 
 void RingManager::draw(sf::RenderWindow& window) const
 {
-    // Draw rings (which now includes their intersection paths)
+    // Draw rings
     for (const auto& ring : m_rings)
     {
         ring->draw(window);
@@ -451,6 +353,16 @@ void RingManager::clear()
 size_t RingManager::getRingCount() const
 {
     return m_rings.size();
+}
+
+std::vector<Ring*> RingManager::getAllRings() const
+{
+    std::vector<Ring*> rings;
+    for (const auto& ring : m_rings)
+    {
+        rings.push_back(ring.get());
+    }
+    return rings;
 }
 
 void RingManager::cycleToNextColor()
