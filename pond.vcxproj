@@ -140,12 +140,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Atom.cpp" />
     <ClCompile Include="events.cpp" />
+    <ClCompile Include="IntersectionPath.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Ring.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Atom.h" />
     <ClInclude Include="events.h" />
+    <ClInclude Include="IntersectionPath.h" />
     <ClInclude Include="Ring.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

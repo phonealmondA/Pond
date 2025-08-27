@@ -3,6 +3,8 @@
 #include <vector>
 #include <memory>
 #include <random>
+#include <array>
+#include "IntersectionPath.h"
 
 class Ring
 {
@@ -27,17 +29,22 @@ private:
     BounceData m_bounceData;
     std::vector<sf::CircleShape> m_bounceShapes; // Additional shapes for bounce reflections
 
+    // Intersection path management (max 6 paths per ring)
+    std::array<IntersectionPath, 6> m_intersectionPaths;
+    int m_activePathCount;
+
     // Helper methods for bouncing
     void updateBounceShapes(const sf::Vector2u& windowSize);
     void createBounceShape(sf::Vector2f center, sf::Color color);
+
+    // Intersection path methods
+    void updateIntersectionPaths(float deltaTime);
+    void checkForNewIntersections(const Ring& otherRing);
 
 public:
     // Calculate growth speed based on color frequency (made public for RingManager)
     static float calculateFrequencyBasedSpeed(const sf::Color& color);
 
-private:
-
-public:
     // Constructor - now calculates speed based on color frequency
     Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float thickness = 3.f);
 
@@ -59,6 +66,9 @@ public:
     // Get current growth speed
     float getGrowthSpeed() const;
 
+    // Get ring color
+    sf::Color getColor() const;
+
     // Set new color (and recalculate speed)
     void setColor(const sf::Color& color);
 
@@ -74,6 +84,9 @@ private:
     std::vector<sf::Color> m_colors;
     sf::Color m_currentColor;
     int m_currentColorIndex;
+
+    // Intersection management between rings
+    void detectAndCreateIntersectionPaths();
 
 public:
     RingManager();

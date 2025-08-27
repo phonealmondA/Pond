@@ -1,4 +1,5 @@
 #include "Ring.h"
+#include "IntersectionPath.h"
 #include <iostream>
 #include <algorithm>
 #include <sstream>
@@ -23,7 +24,7 @@ float Ring::calculateFrequencyBasedSpeed(const sf::Color& color)
 // Ring class implementation with bouncing and frequency-based speed
 Ring::Ring(sf::Vector2f center, sf::Color color, float thickness)
     : m_center(center), m_originalCenter(center), m_currentRadius(5.f),
-    m_color(color), m_isAlive(true), m_thickness(thickness)
+    m_color(color), m_isAlive(true), m_thickness(thickness), m_activePathCount(0)
 {
     // Calculate growth speed based on color frequency
     m_growthSpeed = calculateFrequencyBasedSpeed(color);
@@ -36,6 +37,9 @@ Ring::Ring(sf::Vector2f center, sf::Color color, float thickness)
 
     // Position the shape (SFML positions are top-left corner)
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
+
+    // Initialize intersection paths (they start inactive)
+    // No need to explicitly initialize as IntersectionPath constructor handles it
 }
 
 void Ring::createBounceShape(sf::Vector2f center, sf::Color color)
@@ -162,6 +166,9 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     // Update bounce shapes and reflections
     updateBounceShapes(windowSize);
 
+    // Update intersection paths
+    updateIntersectionPaths(deltaTime);
+
     // Optional: Kill ring when it gets too large (prevents infinite growth)
     if (m_currentRadius > 2000.f) // Adjust this value as needed
     {
@@ -190,6 +197,12 @@ void Ring::draw(sf::RenderWindow& window) const
         {
             window.draw(bounceShape);
         }
+
+        // Draw intersection paths (atoms)
+        for (const auto& path : m_intersectionPaths)
+        {
+            path.draw(window);
+        }
     }
 }
 
@@ -213,6 +226,11 @@ float Ring::getGrowthSpeed() const
     return m_growthSpeed;
 }
 
+sf::Color Ring::getColor() const
+{
+    return m_color;
+}
+
 void Ring::setColor(const sf::Color& color)
 {
     m_color = color;
@@ -230,6 +248,13 @@ void Ring::reset(sf::Vector2f newCenter)
     m_bounceData = BounceData(); // Reset bounce data
     m_bounceShapes.clear();
 
+    // Reset intersection paths
+    for (auto& path : m_intersectionPaths)
+    {
+        path.deactivate();
+    }
+    m_activePathCount = 0;
+
     m_shape.setRadius(m_currentRadius);
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
     m_shape.setOutlineColor(m_color); // Reset to full opacity
@@ -238,11 +263,90 @@ void Ring::reset(sf::Vector2f newCenter)
     m_growthSpeed = calculateFrequencyBasedSpeed(m_color);
 }
 
+// New intersection path methods
+void Ring::updateIntersectionPaths(float deltaTime)
+{
+    for (auto& path : m_intersectionPaths)
+    {
+        if (path.isActive())
+        {
+            path.update(deltaTime);
+        }
+    }
+}
+
+sf::Vector2f Ring::getBounceShapeCenter(int index) const
+{
+    if (index == -1)
+    {
+        return m_center; // Main ring center
+    }
+
+    if (index >= 0 && index < static_cast<int>(m_bounceShapes.size()))
+    {
+        const sf::CircleShape& shape = m_bounceShapes[index];
+        sf::Vector2f position = shape.getPosition();
+        float radius = shape.getRadius();
+        return sf::Vector2f(position.x + radius, position.y + radius); // Convert to center
+    }
+
+    return m_center; // Fallback
+}
+
+int Ring::getBounceShapeCount() const
+{
+    return static_cast<int>(m_bounceShapes.size());
+}
+
+void Ring::tryCreateIntersectionPath(const Ring& otherRing)
+{
+    // Only create paths if we have available slots
+    if (m_activePathCount >= 6) return;
+
+    // Try to create intersection paths between our reflections and other ring's reflections
+    // Priority: main ring vs bounce shapes, then bounce vs bounce
+
+    // Check main ring vs other's bounce shapes
+    for (int otherIndex = 0; otherIndex < otherRing.getBounceShapeCount() && m_activePathCount < 6; ++otherIndex)
+    {
+        // Find an inactive path slot
+        for (int pathIndex = 0; pathIndex < 6; ++pathIndex)
+        {
+            if (!m_intersectionPaths[pathIndex].isActive())
+            {
+                m_intersectionPaths[pathIndex].initialize(this, -1, &otherRing, otherIndex);
+                if (m_intersectionPaths[pathIndex].isActive())
+                {
+                    m_activePathCount++;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Check our bounce shapes vs other's main ring
+    for (int myIndex = 0; myIndex < getBounceShapeCount() && m_activePathCount < 6; ++myIndex)
+    {
+        for (int pathIndex = 0; pathIndex < 6; ++pathIndex)
+        {
+            if (!m_intersectionPaths[pathIndex].isActive())
+            {
+                m_intersectionPaths[pathIndex].initialize(this, myIndex, &otherRing, -1);
+                if (m_intersectionPaths[pathIndex].isActive())
+                {
+                    m_activePathCount++;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 // RingManager class implementation
 RingManager::RingManager()
     : m_randomGen(std::random_device{}()), m_currentColorIndex(0)
 {
-    
+
     // Initialize predefined colors for rings (ordered from lowest to highest frequency/speed)
     m_colors = {
     sf::Color(44, 0, 0),      // Darkest red - slowest
@@ -290,6 +394,25 @@ void RingManager::addRing(sf::Vector2f position)
     m_rings.push_back(std::make_unique<Ring>(position, m_currentColor));
 }
 
+void RingManager::detectAndCreateIntersectionPaths()
+{
+    // Check intersections between all ring pairs for intersection path creation
+    for (size_t i = 0; i < m_rings.size(); ++i)
+    {
+        for (size_t j = i + 1; j < m_rings.size(); ++j)
+        {
+            Ring* ring1 = m_rings[i].get();
+            Ring* ring2 = m_rings[j].get();
+
+            if (!ring1->isAlive() || !ring2->isAlive()) continue;
+
+            // Try to create intersection paths between these rings
+            ring1->tryCreateIntersectionPath(*ring2);
+            ring2->tryCreateIntersectionPath(*ring1);
+        }
+    }
+}
+
 void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
 {
     // Update all rings
@@ -297,6 +420,9 @@ void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
     {
         ring->update(deltaTime, windowSize);
     }
+
+    // Detect and create intersection paths between rings
+    detectAndCreateIntersectionPaths();
 
     // Remove dead rings
     m_rings.erase(
@@ -310,6 +436,7 @@ void RingManager::update(float deltaTime, const sf::Vector2u& windowSize)
 
 void RingManager::draw(sf::RenderWindow& window) const
 {
+    // Draw rings (which now includes their intersection paths)
     for (const auto& ring : m_rings)
     {
         ring->draw(window);
