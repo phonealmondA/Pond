@@ -3,12 +3,31 @@
 #include <algorithm>
 #include <sstream>
 #include <cmath>
+#include <iomanip>
 
-// Ring class implementation with bouncing
-Ring::Ring(sf::Vector2f center, sf::Color color, float growthSpeed, float thickness)
-    : m_center(center), m_originalCenter(center), m_currentRadius(5.f), m_growthSpeed(growthSpeed),
+// Calculate growth speed based on light frequency using optimized formula
+float Ring::calculateFrequencyBasedSpeed(const sf::Color& color)
+{
+    // Frequency-based formula: blue dominant = fastest, red dominant = slowest
+    // Blue gets highest weight (0.6), green medium (0.3), red lowest (0.1)
+    float speedFactor = (color.r * 0.1f + color.g * 0.3f + color.b * 0.6f) / 255.0f;
+
+    // Map to speed range: 20 (slowest) to 120 (fastest) pixels per second
+    float minSpeed = 20.0f;
+    float maxSpeed = 120.0f;
+    float speed = minSpeed + (speedFactor * (maxSpeed - minSpeed));
+
+    return speed;
+}
+
+// Ring class implementation with bouncing and frequency-based speed
+Ring::Ring(sf::Vector2f center, sf::Color color, float thickness)
+    : m_center(center), m_originalCenter(center), m_currentRadius(5.f),
     m_color(color), m_isAlive(true), m_thickness(thickness)
 {
+    // Calculate growth speed based on color frequency
+    m_growthSpeed = calculateFrequencyBasedSpeed(color);
+
     // Set up the main visual shape
     m_shape.setRadius(m_currentRadius);
     m_shape.setFillColor(sf::Color::Transparent);
@@ -189,10 +208,17 @@ sf::Vector2f Ring::getCenter() const
     return m_center;
 }
 
+float Ring::getGrowthSpeed() const
+{
+    return m_growthSpeed;
+}
+
 void Ring::setColor(const sf::Color& color)
 {
     m_color = color;
     m_shape.setOutlineColor(color);
+    // Recalculate growth speed based on new color
+    m_growthSpeed = calculateFrequencyBasedSpeed(color);
 }
 
 void Ring::reset(sf::Vector2f newCenter)
@@ -207,22 +233,53 @@ void Ring::reset(sf::Vector2f newCenter)
     m_shape.setRadius(m_currentRadius);
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
     m_shape.setOutlineColor(m_color); // Reset to full opacity
+
+    // Recalculate growth speed based on current color
+    m_growthSpeed = calculateFrequencyBasedSpeed(m_color);
 }
 
-// RingManager class implementation (unchanged except for cleanup timeout)
+// RingManager class implementation
 RingManager::RingManager()
     : m_randomGen(std::random_device{}()), m_currentColorIndex(0)
 {
-    // Initialize predefined colors for rings
+    
+    // Initialize predefined colors for rings (ordered from lowest to highest frequency/speed)
     m_colors = {
-        sf::Color::Red, sf::Color::Blue, sf::Color::Green,
-        sf::Color::Yellow, sf::Color::Magenta, sf::Color::Cyan,
-        sf::Color(255, 165, 0),   // Orange
-        sf::Color(128, 0, 128),   // Purple
-        sf::Color(255, 192, 203), // Pink
-        sf::Color(0, 255, 127),   // Spring Green
-        sf::Color::White,         // White
-        sf::Color::Black          // Black
+    sf::Color(44, 0, 0),      // Darkest red - slowest
+    sf::Color(84, 0, 0),      // Very dark red - extremely slow
+    sf::Color(108, 0, 0),     // Very dark red - extremely slow
+    sf::Color(138, 0, 0),     // Dark red - very slow  
+    sf::Color(162, 0, 0),     // Dark red - very slow  
+    sf::Color(182, 0, 0),     // Dark red - very slow  
+    sf::Color(192, 0, 0),     // Dark red - very slow  
+    sf::Color(212, 0, 0),     // Medium-dark red - slow
+    sf::Color(255, 0, 0),     // Red - pure red
+    sf::Color(255, 42, 0),    // Red + small green
+    sf::Color(255, 84, 0),    // Red + more green (orange-ish)
+    sf::Color(255, 128, 0),   // Red + medium green (orange)
+    sf::Color(255, 165, 0),   // Orange
+    sf::Color(255, 200, 0),   // Yellow-orange
+    sf::Color(255, 255, 0),   // Yellow
+    sf::Color(200, 255, 0),   // Yellow-green
+    sf::Color(128, 255, 0),   // Lime green
+    sf::Color(0, 255, 0),     // Green
+    sf::Color(0, 255, 84),    // Green + small blue
+    sf::Color(0, 255, 128),   // Green + more blue (spring green)
+    sf::Color(0, 255, 200),   // Green + high blue (cyan-ish)
+    sf::Color(0, 255, 255),   // Cyan
+    sf::Color(0, 200, 255),   // Sky blue
+    sf::Color(0, 128, 255),   // Light blue
+    sf::Color(0, 84, 255),    // Blue + small green
+    sf::Color(0, 0, 255),     // Blue
+    sf::Color(84, 0, 255),    // Blue + small red (purple)
+    sf::Color(128, 0, 255),   // Purple
+    sf::Color(200, 0, 255),   // Magenta-purple
+    sf::Color(255, 0, 255),   // Magenta
+    sf::Color(255, 0, 200),   // Pink-magenta
+    sf::Color(255, 84, 255),  // Light magenta
+    sf::Color(255, 128, 255), // Light pink
+    sf::Color(255, 200, 255), // Very light pink
+    sf::Color(255, 255, 255)  // White - fastest
     };
 
     m_currentColor = m_colors[m_currentColorIndex];
@@ -286,5 +343,27 @@ std::string RingManager::getCurrentColorString() const
     oss << "RGB(" << static_cast<int>(m_currentColor.r) << ", "
         << static_cast<int>(m_currentColor.g) << ", "
         << static_cast<int>(m_currentColor.b) << ")";
+    return oss.str();
+}
+
+std::string RingManager::getCurrentFrequencyInfo() const
+{
+    // Calculate the frequency-based speed for the current color
+    float speed = Ring::calculateFrequencyBasedSpeed(m_currentColor);
+
+    std::ostringstream oss;
+    oss << getCurrentColorString() << " - Speed: " << std::fixed << std::setprecision(1) << speed << " px/s";
+
+    // Add frequency description
+    if (speed < 40.0f) {
+        oss << " (Low frequency)";
+    }
+    else if (speed < 80.0f) {
+        oss << " (Medium frequency)";
+    }
+    else {
+        oss << " (High frequency)";
+    }
+
     return oss.str();
 }

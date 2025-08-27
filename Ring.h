@@ -32,8 +32,14 @@ private:
     void createBounceShape(sf::Vector2f center, sf::Color color);
 
 public:
-    // Constructor
-    Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float growthSpeed = 60.f, float thickness = 3.f);
+    // Calculate growth speed based on color frequency (made public for RingManager)
+    static float calculateFrequencyBasedSpeed(const sf::Color& color);
+
+private:
+
+public:
+    // Constructor - now calculates speed based on color frequency
+    Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float thickness = 3.f);
 
     // Update the ring (growth and bouncing)
     void update(float deltaTime, const sf::Vector2u& windowSize);
@@ -50,7 +56,10 @@ public:
     // Get center position
     sf::Vector2f getCenter() const;
 
-    // Set new color
+    // Get current growth speed
+    float getGrowthSpeed() const;
+
+    // Set new color (and recalculate speed)
     void setColor(const sf::Color& color);
 
     // Reset ring to new position
@@ -78,4 +87,7 @@ public:
     void cycleToNextColor();
     sf::Color getCurrentColor() const;
     std::string getCurrentColorString() const;
+
+    // Get frequency info for current color
+    std::string getCurrentFrequencyInfo() const;
 };
