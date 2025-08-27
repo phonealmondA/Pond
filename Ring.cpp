@@ -2,20 +2,131 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
+#include <cmath>
 
-// Ring class implementation
+// Ring class implementation with bouncing
 Ring::Ring(sf::Vector2f center, sf::Color color, float growthSpeed, float thickness)
-    : m_center(center), m_currentRadius(5.f), m_growthSpeed(growthSpeed),
+    : m_center(center), m_originalCenter(center), m_currentRadius(5.f), m_growthSpeed(growthSpeed),
     m_color(color), m_isAlive(true), m_thickness(thickness)
 {
-    // Set up the visual shape
+    // Set up the main visual shape
     m_shape.setRadius(m_currentRadius);
     m_shape.setFillColor(sf::Color::Transparent);
     m_shape.setOutlineThickness(m_thickness);
     m_shape.setOutlineColor(m_color);
 
-    // Position the shape (SFML positions are top-left corner) - SFML 3.0 syntax
+    // Position the shape (SFML positions are top-left corner)
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
+}
+
+void Ring::createBounceShape(sf::Vector2f center, sf::Color color)
+{
+    sf::CircleShape bounceShape;
+    bounceShape.setRadius(m_currentRadius);
+    bounceShape.setFillColor(sf::Color::Transparent);
+    bounceShape.setOutlineThickness(m_thickness);
+    bounceShape.setOutlineColor(color);
+    bounceShape.setPosition(sf::Vector2f(center.x - m_currentRadius, center.y - m_currentRadius));
+    m_bounceShapes.push_back(bounceShape);
+}
+
+void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
+{
+    m_bounceShapes.clear(); // Clear previous bounce shapes
+
+    float windowWidth = static_cast<float>(windowSize.x);
+    float windowHeight = static_cast<float>(windowSize.y);
+
+    // Check for collisions and create bounce reflections
+    float leftEdge = m_originalCenter.x - m_currentRadius;
+    float rightEdge = m_originalCenter.x + m_currentRadius;
+    float topEdge = m_originalCenter.y - m_currentRadius;
+    float bottomEdge = m_originalCenter.y + m_currentRadius;
+
+    // Track maximum radius for fading effect
+    m_bounceData.maxRadius = std::max(m_bounceData.maxRadius, m_currentRadius);
+
+    // Create a slightly faded color for bounce reflections
+    sf::Color bounceColor = m_color;
+    bounceColor.a = static_cast<std::uint8_t>(bounceColor.a * 0.7f); // 70% opacity for reflections
+
+    // Left wall bounce
+    if (leftEdge <= 0 && !m_bounceData.hasBouncedLeft)
+    {
+        m_bounceData.hasBouncedLeft = true;
+    }
+    if (m_bounceData.hasBouncedLeft)
+    {
+        // Reflect across left wall (x = 0)
+        float reflectedX = -m_originalCenter.x;
+        createBounceShape(sf::Vector2f(reflectedX, m_originalCenter.y), bounceColor);
+    }
+
+    // Right wall bounce
+    if (rightEdge >= windowWidth && !m_bounceData.hasBouncedRight)
+    {
+        m_bounceData.hasBouncedRight = true;
+    }
+    if (m_bounceData.hasBouncedRight)
+    {
+        // Reflect across right wall
+        float reflectedX = 2 * windowWidth - m_originalCenter.x;
+        createBounceShape(sf::Vector2f(reflectedX, m_originalCenter.y), bounceColor);
+    }
+
+    // Top wall bounce
+    if (topEdge <= 0 && !m_bounceData.hasBouncedTop)
+    {
+        m_bounceData.hasBouncedTop = true;
+    }
+    if (m_bounceData.hasBouncedTop)
+    {
+        // Reflect across top wall (y = 0)
+        float reflectedY = -m_originalCenter.y;
+        createBounceShape(sf::Vector2f(m_originalCenter.x, reflectedY), bounceColor);
+    }
+
+    // Bottom wall bounce
+    if (bottomEdge >= windowHeight && !m_bounceData.hasBouncedBottom)
+    {
+        m_bounceData.hasBouncedBottom = true;
+    }
+    if (m_bounceData.hasBouncedBottom)
+    {
+        // Reflect across bottom wall
+        float reflectedY = 2 * windowHeight - m_originalCenter.y;
+        createBounceShape(sf::Vector2f(m_originalCenter.x, reflectedY), bounceColor);
+    }
+
+    // Corner bounces - create diagonal reflections
+    if (m_bounceData.hasBouncedLeft && m_bounceData.hasBouncedTop)
+    {
+        // Top-left corner reflection
+        createBounceShape(sf::Vector2f(-m_originalCenter.x, -m_originalCenter.y), bounceColor);
+    }
+    if (m_bounceData.hasBouncedRight && m_bounceData.hasBouncedTop)
+    {
+        // Top-right corner reflection
+        createBounceShape(sf::Vector2f(2 * windowWidth - m_originalCenter.x, -m_originalCenter.y), bounceColor);
+    }
+    if (m_bounceData.hasBouncedLeft && m_bounceData.hasBouncedBottom)
+    {
+        // Bottom-left corner reflection
+        createBounceShape(sf::Vector2f(-m_originalCenter.x, 2 * windowHeight - m_originalCenter.y), bounceColor);
+    }
+    if (m_bounceData.hasBouncedRight && m_bounceData.hasBouncedBottom)
+    {
+        // Bottom-right corner reflection
+        createBounceShape(sf::Vector2f(2 * windowWidth - m_originalCenter.x, 2 * windowHeight - m_originalCenter.y), bounceColor);
+    }
+
+    // Update all bounce shape positions and sizes
+    for (auto& bounceShape : m_bounceShapes)
+    {
+        bounceShape.setRadius(m_currentRadius);
+        sf::Vector2f bounceCenter = bounceShape.getPosition() + sf::Vector2f(m_currentRadius, m_currentRadius);
+        bounceShape.setPosition(sf::Vector2f(bounceCenter.x - m_currentRadius, bounceCenter.y - m_currentRadius));
+    }
 }
 
 void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
@@ -26,27 +137,22 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     m_currentRadius += m_growthSpeed * deltaTime;
     m_shape.setRadius(m_currentRadius);
 
-    // Update position to keep centered - SFML 3.0 syntax
+    // Update position to keep centered
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
 
-    // Check if ring has hit any edge of the screen
-    float leftEdge = m_center.x - m_currentRadius;
-    float rightEdge = m_center.x + m_currentRadius;
-    float topEdge = m_center.y - m_currentRadius;
-    float bottomEdge = m_center.y + m_currentRadius;
+    // Update bounce shapes and reflections
+    updateBounceShapes(windowSize);
 
-    if (leftEdge <= 0 || rightEdge >= static_cast<float>(windowSize.x) ||
-        topEdge <= 0 || bottomEdge >= static_cast<float>(windowSize.y))
+    // Optional: Kill ring when it gets too large (prevents infinite growth)
+    if (m_currentRadius > 2000.f) // Adjust this value as needed
     {
         m_isAlive = false;
     }
 
-    // Optional: Fade out as ring gets bigger (creates nice visual effect)
+    // Optional: Fade out as ring gets bigger for nice visual effect
     if (m_isAlive)
     {
-        // Fixed SFML 3.0 type - use std::uint8_t instead of sf::Uint8
-        std::uint8_t alpha = static_cast<std::uint8_t>(255 * (1.0f - m_currentRadius / 400.f));
-        alpha = std::max(alpha, static_cast<std::uint8_t>(50)); // Minimum visibility
+        std::uint8_t alpha = static_cast<std::uint8_t>(255 * std::max(0.1f, 1.0f - m_currentRadius / 800.f));
         sf::Color fadedColor = m_color;
         fadedColor.a = alpha;
         m_shape.setOutlineColor(fadedColor);
@@ -57,7 +163,14 @@ void Ring::draw(sf::RenderWindow& window) const
 {
     if (m_isAlive)
     {
+        // Draw main ring
         window.draw(m_shape);
+
+        // Draw all bounce reflections
+        for (const auto& bounceShape : m_bounceShapes)
+        {
+            window.draw(bounceShape);
+        }
     }
 }
 
@@ -85,14 +198,18 @@ void Ring::setColor(const sf::Color& color)
 void Ring::reset(sf::Vector2f newCenter)
 {
     m_center = newCenter;
+    m_originalCenter = newCenter;
     m_currentRadius = 5.f;
     m_isAlive = true;
+    m_bounceData = BounceData(); // Reset bounce data
+    m_bounceShapes.clear();
+
     m_shape.setRadius(m_currentRadius);
     m_shape.setPosition(sf::Vector2f(m_center.x - m_currentRadius, m_center.y - m_currentRadius));
     m_shape.setOutlineColor(m_color); // Reset to full opacity
 }
 
-// RingManager class implementation
+// RingManager class implementation (unchanged except for cleanup timeout)
 RingManager::RingManager()
     : m_randomGen(std::random_device{}()), m_currentColorIndex(0)
 {
@@ -108,13 +225,11 @@ RingManager::RingManager()
         sf::Color::Black          // Black
     };
 
-    // Set initial color
     m_currentColor = m_colors[m_currentColorIndex];
 }
 
 void RingManager::addRing(sf::Vector2f position)
 {
-    // Use the current color instead of random
     m_rings.push_back(std::make_unique<Ring>(position, m_currentColor));
 }
 
@@ -153,16 +268,6 @@ size_t RingManager::getRingCount() const
 {
     return m_rings.size();
 }
-//
-//void RingManager::addRandomRing(const sf::Vector2u& windowSize)
-//{
-//    std::uniform_int_distribution<int> xDist(50, static_cast<int>(windowSize.x) - 50);
-//    std::uniform_int_distribution<int> yDist(50, static_cast<int>(windowSize.y) - 50);
-//
-//    sf::Vector2f randomPos(static_cast<float>(xDist(m_randomGen)),
-//        static_cast<float>(yDist(m_randomGen)));
-//    addRing(randomPos);
-//}
 
 void RingManager::cycleToNextColor()
 {

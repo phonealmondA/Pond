@@ -7,28 +7,44 @@
 class Ring
 {
 private:
+    struct BounceData
+    {
+        bool hasBouncedLeft = false;
+        bool hasBouncedRight = false;
+        bool hasBouncedTop = false;
+        bool hasBouncedBottom = false;
+        float maxRadius = 0.f; // Track maximum radius reached for bouncing calculations
+    };
+
     sf::CircleShape m_shape;
     sf::Vector2f m_center;
+    sf::Vector2f m_originalCenter; // Store original center for bounce calculations
     float m_currentRadius;
     float m_growthSpeed;
     sf::Color m_color;
     bool m_isAlive;
     float m_thickness;
+    BounceData m_bounceData;
+    std::vector<sf::CircleShape> m_bounceShapes; // Additional shapes for bounce reflections
+
+    // Helper methods for bouncing
+    void updateBounceShapes(const sf::Vector2u& windowSize);
+    void createBounceShape(sf::Vector2f center, sf::Color color);
 
 public:
     // Constructor
     Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float growthSpeed = 60.f, float thickness = 3.f);
 
-    // Update the ring (growth and bounds checking)
+    // Update the ring (growth and bouncing)
     void update(float deltaTime, const sf::Vector2u& windowSize);
 
-    // Draw the ring
+    // Draw the ring and all bounce reflections
     void draw(sf::RenderWindow& window) const;
 
-    // Check if ring is still alive (hasn't hit edges)
+    // Check if ring is still alive
     bool isAlive() const;
 
-    // Get current radius (useful for other calculations)
+    // Get current radius
     float getRadius() const;
 
     // Get center position
@@ -57,9 +73,8 @@ public:
     void draw(sf::RenderWindow& window) const;
     void clear();
     size_t getRingCount() const;
-    //void addRandomRing(const sf::Vector2u& windowSize);
 
-    // New methods for color management
+    // Color management methods
     void cycleToNextColor();
     sf::Color getCurrentColor() const;
     std::string getCurrentColorString() const;
