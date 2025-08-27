@@ -24,9 +24,13 @@ void handleMouseButtonPress(const sf::Event::MouseButtonPressed* mouseClick, sf:
     {
         std::cout << "Left mouse button pressed!" << std::endl;
 
-        // Move ring to click position - center it on the click using current radius
-        shape.setPosition({ static_cast<float>(clickPos.x - currentRadius),
-                           static_cast<float>(clickPos.y - currentRadius) });
+        // Reset ring to small size and center it on click position - SFML 3.0 compatible
+        float newRadius = 10.f;
+        shape.setRadius(newRadius);
+        shape.setPosition(sf::Vector2f(static_cast<float>(clickPos.x - newRadius),
+            static_cast<float>(clickPos.y - newRadius)));
+
+        std::cout << "Shape reset and centered at click position" << std::endl;
     }
     else if (mouseClick->button == sf::Mouse::Button::Right)
     {
@@ -34,9 +38,10 @@ void handleMouseButtonPress(const sf::Event::MouseButtonPressed* mouseClick, sf:
 
         // Change ring color on right click
         static int colorIndex = 0;
-        sf::Color colors[] = { sf::Color::Red, sf::Color::Blue, sf::Color::Green, sf::Color::Yellow };
-        colorIndex = (colorIndex + 1) % 4;
-        shape.setOutlineColor(colors[colorIndex]); // Change outline color for ring
+        sf::Color colors[] = { sf::Color::Red, sf::Color::Blue, sf::Color::Green,
+                             sf::Color::Yellow, sf::Color::Magenta, sf::Color::Cyan };
+        colorIndex = (colorIndex + 1) % 6;
+        shape.setOutlineColor(colors[colorIndex]);
     }
 }
 
