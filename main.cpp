@@ -99,7 +99,7 @@ int main()
 
         // Update atoms and detect intersections
         std::vector<Ring*> allRings = ringManager.getAllRings();
-        atomManager.update(deltaTime, allRings);
+        atomManager.update(deltaTime, allRings, window.getSize());
 
         // Periodic info display (every 5 seconds)
         if (infoTimer.getElapsedTime().asSeconds() > 5.0f)

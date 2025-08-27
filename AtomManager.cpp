@@ -233,7 +233,7 @@ void AtomManager::update(float deltaTime, const std::vector<Ring*>& rings)
     }
 
     // Detect new intersections and create atoms
-    detectNewIntersections(allShapes);
+    detectNewIntersections(allShapes, windowSize);
 
     // Clean up intersection tracking
     cleanupIntersectionTracking(allShapes);
@@ -268,7 +268,7 @@ void AtomManager::detectNewIntersections(const std::vector<RingShape>& allShapes
     {
         for (size_t j = i + 1; j < allShapes.size(); ++j)
         {
-            checkShapePairForNewIntersection(allShapes[i], allShapes[j]);
+            checkShapePairForNewIntersection(allShapes[i], allShapes[j], windowSize);
         }
     }
 }
@@ -332,7 +332,6 @@ void AtomManager::checkShapePairForNewIntersection(const RingShape& shape1, cons
             return; // Already have atom tracking this pair
         }
     }
-
     // Calculate intersection point and create new atom
     float a = (shape1.radius * shape1.radius - shape2.radius * shape2.radius + distance * distance) / (2.0f * distance);
     float h = std::sqrt(shape1.radius * shape1.radius - a * a);
@@ -345,9 +344,16 @@ void AtomManager::checkShapePairForNewIntersection(const RingShape& shape1, cons
     intersectionPoint.x = p.x + (h * dy) / distance;
     intersectionPoint.y = p.y - (h * dx) / distance;
 
-    // Mark as tracked and create atom
-    m_trackedIntersections.insert(key);
-    addPathFollowingAtom(shape1, shape2, intersectionPoint);
+    // Check if intersection point is within screen bounds (with small margin)
+    float margin = 50.0f; // Allow atoms slightly off-screen in case they move on-screen
+    if (intersectionPoint.x >= -margin && intersectionPoint.x <= windowSize.x + margin &&
+        intersectionPoint.y >= -margin && intersectionPoint.y <= windowSize.y + margin)
+    {
+        // Only create atom if intersection point is near/on screen
+        m_trackedIntersections.insert(key);
+        addPathFollowingAtom(shape1, shape2, intersectionPoint);
+    }
+    // If intersection is far off-screen, we simply don't create the atom
 }
 
 void AtomManager::addPathFollowingAtom(const RingShape& shape1, const RingShape& shape2, sf::Vector2f intersectionPoint)

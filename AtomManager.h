@@ -88,7 +88,7 @@ private:
 class AtomManager
 {
 private:
-    static const size_t MAX_ATOMS = 300;
+    static const size_t MAX_ATOMS = 50;
 
     std::vector<std::unique_ptr<PathFollowingAtom>> m_atoms;
     size_t m_nextSlot; // FIFO insertion point
@@ -105,7 +105,7 @@ public:
     AtomManager();
 
     // Main update method - detects intersections and creates/updates atoms
-    void update(float deltaTime, const std::vector<Ring*>& rings);
+    void update(float deltaTime, const std::vector<Ring*>& rings, const sf::Vector2u& windowSize);
 
     // Draw all atoms
     void draw(sf::RenderWindow& window) const;
@@ -117,9 +117,9 @@ public:
 
 private:
     // Intersection detection methods
-    void detectNewIntersections(const std::vector<RingShape>& allShapes);
+    void detectNewIntersections(const std::vector<RingShape>& allShapes, const sf::Vector2u& windowSize);
     std::vector<RingShape> getAllShapes(const std::vector<Ring*>& rings) const;
-    void checkShapePairForNewIntersection(const RingShape& shape1, const RingShape& shape2);
+    void checkShapePairForNewIntersection(const RingShape& shape1, const RingShape& shape2, const sf::Vector2u& windowSize);
 
     // Add new path-following atom
     void addPathFollowingAtom(const RingShape& shape1, const RingShape& shape2, sf::Vector2f intersectionPoint);
