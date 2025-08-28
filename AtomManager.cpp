@@ -218,7 +218,8 @@ AtomManager::AtomManager()
     m_atoms.resize(MAX_ATOMS);
 }
 
-void AtomManager::update(float deltaTime, const std::vector<Ring*>& rings)
+// FIXED: Added windowSize parameter to match header declaration
+void AtomManager::update(float deltaTime, const std::vector<Ring*>& rings, const sf::Vector2u& windowSize)
 {
     // Get all current shapes
     std::vector<RingShape> allShapes = getAllShapes(rings);
@@ -261,7 +262,8 @@ void AtomManager::clear()
     m_trackedIntersections.clear();
 }
 
-void AtomManager::detectNewIntersections(const std::vector<RingShape>& allShapes)
+// FIXED: Added windowSize parameter to match header declaration
+void AtomManager::detectNewIntersections(const std::vector<RingShape>& allShapes, const sf::Vector2u& windowSize)
 {
     // Check all shape pairs for new intersections
     for (size_t i = 0; i < allShapes.size(); ++i)
@@ -296,7 +298,8 @@ std::vector<RingShape> AtomManager::getAllShapes(const std::vector<Ring*>& rings
     return shapes;
 }
 
-void AtomManager::checkShapePairForNewIntersection(const RingShape& shape1, const RingShape& shape2)
+// FIXED: Added windowSize parameter to match header declaration
+void AtomManager::checkShapePairForNewIntersection(const RingShape& shape1, const RingShape& shape2, const sf::Vector2u& windowSize)
 {
     // Don't check intersections between shapes from the same ring
     if (shape1.sourceRing == shape2.sourceRing) return;
@@ -344,7 +347,7 @@ void AtomManager::checkShapePairForNewIntersection(const RingShape& shape1, cons
     intersectionPoint.x = p.x + (h * dy) / distance;
     intersectionPoint.y = p.y - (h * dx) / distance;
 
-    // Check if intersection point is within screen bounds (with small margin)
+    // FIXED: Check if intersection point is within screen bounds (with small margin)
     float margin = 50.0f; // Allow atoms slightly off-screen in case they move on-screen
     if (intersectionPoint.x >= -margin && intersectionPoint.x <= windowSize.x + margin &&
         intersectionPoint.y >= -margin && intersectionPoint.y <= windowSize.y + margin)
