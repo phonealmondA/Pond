@@ -23,6 +23,9 @@ private:
     // Get all neighboring cells (including current cell)
     std::vector<int> getNeighborCells(float x, float y, float radius) const;
 
+    // OPTIMIZED: Check if shape is near viewport (for culling off-screen shapes)
+    bool isNearViewport(const RingShape& shape, float margin = 200.0f) const;
+
 public:
     SpatialGrid(const sf::Vector2u& windowSize, float cellSize = 200.0f);
 

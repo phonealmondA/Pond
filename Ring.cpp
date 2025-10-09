@@ -210,11 +210,24 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     // Update bounce shapes and reflections
     updateBounceShapes(windowSize);
 
-    // Optional: Kill ring when it gets too large (prevents infinite growth)
+    // OPTIMIZED: Kill ring when it gets too large (prevents infinite growth)
     if (m_currentRadius > 2000.f) // Adjust this value as needed
     {
         m_isAlive = false;
         return; // OPTIMIZED: Early exit
+    }
+
+    // OPTIMIZED: Kill ring early if center is far off-screen
+    // This prevents off-screen rings from participating in collision detection
+    const float windowWidth = static_cast<float>(windowSize.x);
+    const float windowHeight = static_cast<float>(windowSize.y);
+    const float offScreenMargin = 500.0f; // Kill if center is 500+ pixels beyond window bounds
+
+    if (m_center.x < -offScreenMargin || m_center.x > windowWidth + offScreenMargin ||
+        m_center.y < -offScreenMargin || m_center.y > windowHeight + offScreenMargin)
+    {
+        m_isAlive = false;
+        return; // OPTIMIZED: Early exit for far off-screen rings
     }
 
     // OPTIMIZED: Cache alpha calculation - fade out as ring gets bigger

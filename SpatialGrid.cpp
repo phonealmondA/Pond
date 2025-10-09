@@ -55,9 +55,19 @@ void SpatialGrid::rebuild(const std::vector<RingShape>& shapes)
 {
     m_grid.clear();
 
+    // OPTIMIZED: Reserve approximate capacity to reduce allocations
+    m_grid.reserve(shapes.size() / 2);
+
     // Insert each shape into appropriate grid cells
     for (const auto& shape : shapes)
     {
+        // OPTIMIZED: Skip shapes that are completely off-screen with margin
+        // This dramatically reduces collision checks for off-screen shapes
+        if (!isNearViewport(shape, 200.0f))
+        {
+            continue; // Skip this shape entirely - won't participate in collision checks
+        }
+
         // Get all cells this shape overlaps
         std::vector<int> cells = getNeighborCells(shape.center.x, shape.center.y, shape.radius);
 
@@ -129,4 +139,18 @@ std::vector<std::pair<const RingShape*, const RingShape*>> SpatialGrid::getAllPo
 
     // OPTIMIZED: Use move semantics for return
     return std::move(pairs);
+}
+
+// OPTIMIZED: Check if shape is near viewport bounds for culling
+bool SpatialGrid::isNearViewport(const RingShape& shape, float margin) const
+{
+    const float windowWidth = static_cast<float>(m_windowSize.x);
+    const float windowHeight = static_cast<float>(m_windowSize.y);
+    const float cullMargin = shape.radius + margin;
+
+    // Check if shape's bounding box intersects with viewport + margin
+    return (shape.center.x + cullMargin >= 0.0f &&
+            shape.center.x - cullMargin <= windowWidth &&
+            shape.center.y + cullMargin >= 0.0f &&
+            shape.center.y - cullMargin <= windowHeight);
 }
