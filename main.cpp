@@ -12,11 +12,14 @@ int main()
     // Ring manager to handle all rings
     RingManager ringManager;
 
-    // Global atom manager with FIFO system
+    // Global atom manager with FIFO system (now invisible by default)
     AtomManager atomManager;
 
     // OPTIMIZED: Batch renderer for performance
     BatchRenderer batchRenderer;
+
+    // Debug mode - shows invisible atoms when enabled
+    bool debugShowAtoms = false;
 
     // Clock for timing
     sf::Clock clock;
@@ -29,6 +32,7 @@ int main()
     std::cout << "Controls:" << std::endl;
     std::cout << "- Left click: Create ring at cursor position" << std::endl;
     std::cout << "- Right click: Change ring color/frequency" << std::endl;
+    std::cout << "- D: Toggle debug atom visualization" << std::endl;
     std::cout << "- Space: Clear all rings and atoms" << std::endl;
     std::cout << "- Escape: Exit" << std::endl;
     std::cout << std::endl;
@@ -104,6 +108,11 @@ int main()
                     atomManager.clear();
                     std::cout << "All rings and atoms cleared" << std::endl;
                 }
+                else if (keyPress->code == sf::Keyboard::Key::D)
+                {
+                    debugShowAtoms = !debugShowAtoms;
+                    std::cout << "Debug atom visualization: " << (debugShowAtoms ? "ON" : "OFF") << std::endl;
+                }
                 else if (keyPress->code == sf::Keyboard::Key::Escape)
                 {
                     window.close();
@@ -138,10 +147,12 @@ int main()
         // Render
         window.clear(sf::Color::Black);
 
-        // OPTIMIZED: Use batch rendering (2 draw calls instead of 100+)
+        // OPTIMIZED: Use batch rendering (atoms invisible by default, rings always visible)
         batchRenderer.begin();
         ringManager.addToBatch(batchRenderer);
-        atomManager.addToBatch(batchRenderer);
+        if (debugShowAtoms) {
+            atomManager.addToBatch(batchRenderer);  // Only render atoms in debug mode
+        }
         batchRenderer.end(window);
 
         window.display();
