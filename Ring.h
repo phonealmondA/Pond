@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <random>
+#include "Constants.h"
 
 class Ring
 {
@@ -36,7 +37,7 @@ public:
     static float calculateFrequencyBasedSpeed(const sf::Color& color);
 
     // Constructor - calculates speed based on color frequency
-    Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float thickness = 3.f);
+    Ring(sf::Vector2f center, sf::Color color = sf::Color::White, float thickness = Constants::Ring::DEFAULT_THICKNESS);
 
     // Update the ring (growth and bouncing)
     void update(float deltaTime, const sf::Vector2u& windowSize);

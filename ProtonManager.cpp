@@ -8,7 +8,7 @@
 ProtonManager::ProtonManager()
     : m_nextSlot(0)
 {
-    m_protons.resize(MAX_PROTONS);
+    m_protons.resize(Constants::System::MAX_PROTONS);
 }
 
 void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager, const std::vector<Ring*>& rings)
@@ -19,38 +19,41 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
     // Update physics for all protons
     updateProtonPhysics(deltaTime, windowSize);
 
-    // Check protons for wave field interactions (neutron formation)
+    // Apply charge-based atom forces (attraction/repulsion)
+    handleProtonAtomForces(deltaTime, atomManager);
+
+    // Check protons for atom proximity interactions (neutron formation)
     for (auto& proton : m_protons)
     {
-        if (proton && proton->isAlive())
+        if (proton && proton->isAlive() && proton->getCharge() == +1)
         {
-            bool insideWaveField = false;
-
-            // Check if proton is inside any ring
+            bool nearAtom = false;
             sf::Vector2f protonPos = proton->getPosition();
-            for (Ring* ring : rings)
+
+            // Get all atoms from atom manager
+            const auto& atoms = atomManager.getAtoms();
+
+            // Check if proton is near any atom
+            for (const auto& atom : atoms)
             {
-                if (ring && ring->isAlive())
+                if (atom && atom->isAlive())
                 {
-                    sf::Vector2f ringCenter = ring->getCenter();
-                    float ringRadius = ring->getRadius();
+                    sf::Vector2f atomPos = atom->getPosition();
+                    float dx = protonPos.x - atomPos.x;
+                    float dy = protonPos.y - atomPos.y;
+                    float distSquared = dx * dx + dy * dy;
 
-                    // Calculate distance from proton to ring center
-                    float dx = protonPos.x - ringCenter.x;
-                    float dy = protonPos.y - ringCenter.y;
-                    float distance = std::sqrt(dx * dx + dy * dy);
-
-                    // Proton is inside ring if distance < radius
-                    if (distance < ringRadius)
+                    // Proton is near atom if distance < NEUTRON_FORMATION_DISTANCE
+                    if (distSquared < Constants::ProtonManager::NEUTRON_FORMATION_DISTANCE * Constants::ProtonManager::NEUTRON_FORMATION_DISTANCE)
                     {
-                        insideWaveField = true;
+                        nearAtom = true;
                         break;
                     }
                 }
             }
 
-            // Try neutron formation based on wave field status
-            proton->tryNeutronFormation(deltaTime, insideWaveField);
+            // Try neutron formation based on atom proximity
+            proton->tryNeutronFormation(deltaTime, nearAtom);
         }
     }
 
@@ -168,13 +171,13 @@ void ProtonManager::handleProtonProtonRepulsion(float deltaTime)
             float distance = std::sqrt(distSquared);
 
             // Skip if too far apart
-            if (distance > REPULSION_RANGE) continue;
+            if (distance > Constants::ProtonManager::REPULSION_RANGE) continue;
 
             // Calculate repulsion force (inverse square law)
-            float force = REPULSION_STRENGTH / (distSquared + 1.0f); // +1 to avoid division by zero
+            float force = Constants::ProtonManager::REPULSION_STRENGTH / (distSquared + Constants::ProtonManager::REPULSION_SAFETY_FACTOR);
 
             // Normalize direction vector
-            if (distance > 0.001f)
+            if (distance > Constants::Math::EPSILON)
             {
                 delta /= distance;
 
@@ -240,6 +243,61 @@ void ProtonManager::handleProtonProtonAbsorption()
     }
 }
 
+void ProtonManager::handleProtonAtomForces(float deltaTime, const AtomManager& atomManager)
+{
+    // Get all atoms from atom manager
+    const auto& atoms = atomManager.getAtoms();
+
+    // Loop through all protons
+    for (auto& proton : m_protons)
+    {
+        if (!proton || !proton->isAlive()) continue;
+
+        // Skip neutral protons (charge 0)
+        int charge = proton->getCharge();
+        if (charge == 0) continue;
+
+        sf::Vector2f protonPos = proton->getPosition();
+
+        // Loop through all atoms
+        for (const auto& atom : atoms)
+        {
+            if (!atom || !atom->isAlive()) continue;
+
+            sf::Vector2f atomPos = atom->getPosition();
+            sf::Vector2f delta = atomPos - protonPos;
+            float distSquared = delta.x * delta.x + delta.y * delta.y;
+
+            // Check if atom is within interaction range
+            if (distSquared < Constants::ProtonManager::ATOM_ATTRACTION_RANGE * Constants::ProtonManager::ATOM_ATTRACTION_RANGE && distSquared > Constants::Math::EPSILON)
+            {
+                float distance = std::sqrt(distSquared);
+
+                // Normalize direction vector
+                sf::Vector2f direction = delta / distance;
+
+                // Calculate force using inverse square law
+                float force;
+                if (charge == +1)
+                {
+                    // Positive charge: attraction toward atom
+                    force = Constants::ProtonManager::ATOM_ATTRACTION_STRENGTH / (distSquared + Constants::ProtonManager::REPULSION_SAFETY_FACTOR);
+                }
+                else // charge == -1
+                {
+                    // Negative charge: repulsion away from atom
+                    force = -Constants::ProtonManager::ATOM_REPULSION_STRENGTH / (distSquared + Constants::ProtonManager::REPULSION_SAFETY_FACTOR);
+                }
+
+                // Apply force as velocity change using proton mass
+                float mass = proton->getMass();
+                sf::Vector2f acceleration = direction * (force / mass) * deltaTime;
+                proton->addVelocity(acceleration);
+            }
+        }
+    }
+}
+
 void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomManager)
 {
     // Struct to hold safe snapshot of atom data (no pointers)
@@ -255,7 +313,7 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
 
     for (const auto& atom : atoms)
     {
-        if (atom && atom->isAlive() && atom->getEnergy() >= MIN_ATOM_ENERGY_THRESHOLD)
+        if (atom && atom->isAlive() && atom->getEnergy() >= Constants::ProtonManager::MIN_ATOM_ENERGY_THRESHOLD)
         {
             AtomSnapshot snapshot;
             snapshot.position = atom->getPosition();
@@ -278,23 +336,21 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
             float distSquared = dx * dx + dy * dy;
 
             // Collision threshold (atoms are close)
-            const float COLLISION_THRESHOLD = 15.0f;
-            const float COLLISION_THRESHOLD_SQ = COLLISION_THRESHOLD * COLLISION_THRESHOLD;
+            const float COLLISION_THRESHOLD_SQ = Constants::ProtonManager::COLLISION_THRESHOLD * Constants::ProtonManager::COLLISION_THRESHOLD;
 
             // 4. If atoms collide and have sufficient combined energy, spawn a proton
             if (distSquared < COLLISION_THRESHOLD_SQ)
             {
                 float combinedEnergy = atom1.energy + atom2.energy;
 
-                if (combinedEnergy >= MIN_COMBINED_ENERGY)
+                if (combinedEnergy >= Constants::ProtonManager::MIN_COMBINED_ENERGY)
                 {
                     // Calculate spawn position (midpoint between atoms)
                     sf::Vector2f spawnPos = (atom1.position + atom2.position) * 0.5f;
 
                     // Check if this position is on cooldown
                     bool hasCooldown = false;
-                    const float COOLDOWN_DIST = 20.0f; // Prevent spawns within 20 pixels of recent spawns
-                    const float COOLDOWN_DIST_SQ = COOLDOWN_DIST * COOLDOWN_DIST;
+                    const float COOLDOWN_DIST_SQ = Constants::ProtonManager::COOLDOWN_DISTANCE * Constants::ProtonManager::COOLDOWN_DISTANCE;
 
                     for (const auto& cooldown : m_spawnCooldowns)
                     {
@@ -314,11 +370,11 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
                     // Calculate velocity (perpendicular to collision line, based on energy)
                     sf::Vector2f collisionDir(dx, dy);
                     float dist = std::sqrt(distSquared);
-                    if (dist > 0.001f) collisionDir /= dist;
+                    if (dist > Constants::Math::EPSILON) collisionDir /= dist;
 
                     // Perpendicular direction (rotate 90 degrees)
                     sf::Vector2f perpDir(-collisionDir.y, collisionDir.x);
-                    float speed = std::min(combinedEnergy * 0.5f, 200.0f); // Cap max speed
+                    float speed = std::min(combinedEnergy * Constants::ProtonManager::VELOCITY_ENERGY_FACTOR, Constants::ProtonManager::MAX_SPAWN_SPEED);
                     sf::Vector2f velocity = perpDir * speed;
 
                     // Proton color (white for now - could mix atom colors if available)
@@ -327,8 +383,8 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
                     // Spawn the proton
                     spawnProton(spawnPos, velocity, protonColor, combinedEnergy);
 
-                    // 5. Add cooldown to prevent duplicate spawns (0.5 seconds)
-                    m_spawnCooldowns.push_back(std::make_pair(spawnPos, 0.5f));
+                    // 5. Add cooldown to prevent duplicate spawns
+                    m_spawnCooldowns.push_back(std::make_pair(spawnPos, Constants::ProtonManager::SPAWN_COOLDOWN_TIME));
                 }
             }
         }
@@ -338,11 +394,11 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
 void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy)
 {
     // Check if we have space
-    if (getProtonCount() >= MAX_PROTONS)
+    if (getProtonCount() >= Constants::System::MAX_PROTONS)
     {
         // FIFO replacement - find oldest unstable slot (skip stable hydrogen)
         size_t attempts = 0;
-        while (attempts < MAX_PROTONS)
+        while (attempts < Constants::System::MAX_PROTONS)
         {
             if (!m_protons[m_nextSlot] ||
                 (!m_protons[m_nextSlot]->isAlive()) ||
@@ -350,10 +406,10 @@ void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf
             {
                 // Found a slot that can be replaced
                 m_protons[m_nextSlot] = std::make_unique<Proton>(position, velocity, color, energy);
-                m_nextSlot = (m_nextSlot + 1) % MAX_PROTONS;
+                m_nextSlot = (m_nextSlot + 1) % Constants::System::MAX_PROTONS;
                 break;
             }
-            m_nextSlot = (m_nextSlot + 1) % MAX_PROTONS;
+            m_nextSlot = (m_nextSlot + 1) % Constants::System::MAX_PROTONS;
             attempts++;
         }
     }
@@ -365,7 +421,7 @@ void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf
             if (!m_protons[i] || !m_protons[i]->isAlive())
             {
                 m_protons[i] = std::make_unique<Proton>(position, velocity, color, energy);
-                m_nextSlot = (i + 1) % MAX_PROTONS;
+                m_nextSlot = (i + 1) % Constants::System::MAX_PROTONS;
                 break;
             }
         }

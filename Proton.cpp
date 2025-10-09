@@ -21,9 +21,9 @@ Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, fl
     m_radius = calculateRadius(energy);
     m_mass = calculateMass(energy);
 
-    // Proton lifetime: 20 seconds default, or infinite if set to -1
-    m_maxLifetime = 20.0f;
-    m_fadeStartTime = m_maxLifetime * 0.8f; // Start fading at 80% of lifetime
+    // Proton lifetime
+    m_maxLifetime = Constants::Proton::DEFAULT_LIFETIME;
+    m_fadeStartTime = m_maxLifetime * Constants::Proton::FADE_START_RATIO;
 }
 
 void Proton::update(float deltaTime, const sf::Vector2u& windowSize)
@@ -41,8 +41,8 @@ void Proton::update(float deltaTime, const sf::Vector2u& windowSize)
         return;
     }
 
-    // Apply friction to velocity
-    m_velocity *= FRICTION;
+    // Friction removed to simulate vacuum
+    // m_velocity *= FRICTION;
 
     // Update position based on velocity
     m_position += m_velocity * deltaTime;
@@ -63,27 +63,27 @@ void Proton::addToBatch(BatchRenderer& batchRenderer) const
     if (m_isStableHydrogen)
     {
         // Stable hydrogen: bright white
-        renderColor.r = 255;
-        renderColor.g = 255;
-        renderColor.b = 255;
-        renderRadius *= 1.3f;
+        renderColor.r = Constants::Proton::STABLE_HYDROGEN_R;
+        renderColor.g = Constants::Proton::STABLE_HYDROGEN_G;
+        renderColor.b = Constants::Proton::STABLE_HYDROGEN_B;
+        renderRadius *= Constants::Proton::STABLE_HYDROGEN_RADIUS_MULTIPLIER;
     }
     else if (m_charge == 0)
     {
         // Neutral with neutron: gray-white
-        renderColor.r = 200;
-        renderColor.g = 200;
-        renderColor.b = 200;
+        renderColor.r = Constants::Proton::NEUTRAL_PROTON_R;
+        renderColor.g = Constants::Proton::NEUTRAL_PROTON_G;
+        renderColor.b = Constants::Proton::NEUTRAL_PROTON_B;
     }
     else if (m_charge == +1)
     {
         // Bare proton: slight red tint
-        renderColor.r = static_cast<std::uint8_t>(std::min(255, static_cast<int>(renderColor.r * 1.2f)));
+        renderColor.r = static_cast<std::uint8_t>(std::min(255, static_cast<int>(renderColor.r * Constants::Proton::BARE_PROTON_RED_TINT)));
     }
 
     // Pulsing effect based on energy
-    float pulseFrequency = 2.0f + (m_energy * 0.01f);
-    float pulse = std::sin(m_pulseTimer * pulseFrequency) * 0.2f + 1.0f;
+    float pulseFrequency = Constants::Proton::PULSE_FREQUENCY_BASE + (m_energy * Constants::Proton::PULSE_FREQUENCY_ENERGY_FACTOR);
+    float pulse = std::sin(m_pulseTimer * pulseFrequency) * Constants::Proton::PULSE_INTENSITY + Constants::Proton::PULSE_BASE;
     renderRadius *= pulse;
 
     // Fade out near end of lifetime
@@ -99,12 +99,12 @@ void Proton::addToBatch(BatchRenderer& batchRenderer) const
 
     // Add glow layers for visual polish
     sf::Color glowColor1 = renderColor;
-    glowColor1.a = static_cast<std::uint8_t>(glowColor1.a * 0.5f);
-    batchRenderer.addAtom(m_position, renderRadius * 1.5f, glowColor1);
+    glowColor1.a = static_cast<std::uint8_t>(glowColor1.a * Constants::Proton::GLOW_LAYER1_ALPHA);
+    batchRenderer.addAtom(m_position, renderRadius * Constants::Proton::GLOW_LAYER1_RADIUS, glowColor1);
 
     sf::Color glowColor2 = renderColor;
-    glowColor2.a = static_cast<std::uint8_t>(glowColor2.a * 0.25f);
-    batchRenderer.addAtom(m_position, renderRadius * 2.0f, glowColor2);
+    glowColor2.a = static_cast<std::uint8_t>(glowColor2.a * Constants::Proton::GLOW_LAYER2_ALPHA);
+    batchRenderer.addAtom(m_position, renderRadius * Constants::Proton::GLOW_LAYER2_RADIUS, glowColor2);
 }
 
 void Proton::absorbProton(const Proton& other)
@@ -134,14 +134,14 @@ void Proton::absorbProton(const Proton& other)
 float Proton::calculateRadius(float energy) const
 {
     // Scale radius based on energy, clamped to min/max
-    float radius = MIN_RADIUS + (energy * 0.01f);
-    return std::clamp(radius, MIN_RADIUS, MAX_RADIUS);
+    float radius = Constants::Proton::MIN_RADIUS + (energy * Constants::Proton::ENERGY_TO_RADIUS_FACTOR);
+    return std::clamp(radius, Constants::Proton::MIN_RADIUS, Constants::Proton::MAX_RADIUS);
 }
 
 float Proton::calculateMass(float energy) const
 {
     // Mass proportional to energy (E=mc²-ish)
-    return energy * 0.1f;
+    return energy * Constants::Proton::ENERGY_TO_MASS_FACTOR;
 }
 
 void Proton::handleBoundaryCollision(const sf::Vector2u& windowSize)
@@ -152,13 +152,13 @@ void Proton::handleBoundaryCollision(const sf::Vector2u& windowSize)
     if (m_position.x - m_radius < 0)
     {
         m_position.x = m_radius;
-        m_velocity.x = -m_velocity.x * BOUNCE_DAMPENING;
+        m_velocity.x = -m_velocity.x * Constants::Proton::BOUNCE_DAMPENING;
         collided = true;
     }
     else if (m_position.x + m_radius > windowSize.x)
     {
         m_position.x = windowSize.x - m_radius;
-        m_velocity.x = -m_velocity.x * BOUNCE_DAMPENING;
+        m_velocity.x = -m_velocity.x * Constants::Proton::BOUNCE_DAMPENING;
         collided = true;
     }
 
@@ -166,38 +166,38 @@ void Proton::handleBoundaryCollision(const sf::Vector2u& windowSize)
     if (m_position.y - m_radius < 0)
     {
         m_position.y = m_radius;
-        m_velocity.y = -m_velocity.y * BOUNCE_DAMPENING;
+        m_velocity.y = -m_velocity.y * Constants::Proton::BOUNCE_DAMPENING;
         collided = true;
     }
     else if (m_position.y + m_radius > windowSize.y)
     {
         m_position.y = windowSize.y - m_radius;
-        m_velocity.y = -m_velocity.y * BOUNCE_DAMPENING;
+        m_velocity.y = -m_velocity.y * Constants::Proton::BOUNCE_DAMPENING;
         collided = true;
     }
 }
 
-void Proton::tryNeutronFormation(float deltaTime, bool insideWaveField)
+void Proton::tryNeutronFormation(float deltaTime, bool nearAtom)
 {
     // Already has neutron, skip
     if (m_charge != +1) return;
 
-    // Not in wave field, reset timer
-    if (!insideWaveField)
+    // Not near atom, reset timer
+    if (!nearAtom)
     {
         m_waveFieldTimer = 0.0f;
         return;
     }
 
-    // Inside wave field, accumulate time
+    // Near atom, accumulate time
     m_waveFieldTimer += deltaTime;
 
     // Check if neutron formation threshold reached
-    if (m_waveFieldTimer >= 3.0f)
+    if (m_waveFieldTimer >= Constants::Proton::NEUTRON_FORMATION_TIME)
     {
         m_neutronCount = 1;
         m_charge = 0;
-        m_radius *= 1.2f;
+        m_radius *= Constants::Proton::NEUTRON_RADIUS_MULTIPLIER;
         m_waveFieldTimer = 0.0f;
     }
 }
@@ -218,10 +218,10 @@ bool Proton::tryCaptureElectron(const PathFollowingAtom& electron)
     float distance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
 
     // Check if electron is close enough to capture
-    if (distance < 15.0f)
+    if (distance < Constants::Proton::ELECTRON_CAPTURE_DISTANCE)
     {
         m_isStableHydrogen = true;
-        m_maxLifetime = -1.0f; // Never die from age
+        m_maxLifetime = Constants::Proton::INFINITE_LIFETIME; // Never die from age
         return true;
     }
 

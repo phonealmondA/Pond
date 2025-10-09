@@ -5,7 +5,7 @@ BatchRenderer::BatchRenderer()
     : m_vertices(sf::PrimitiveType::Triangles)
 {
     // Reserve space to minimize allocations
-    m_tempVertices.reserve(10000); // Enough for many circles
+    m_tempVertices.reserve(Constants::Rendering::VERTEX_RESERVE_SIZE); // Enough for many circles
 }
 
 void BatchRenderer::begin()
@@ -23,10 +23,10 @@ void BatchRenderer::generateCircleOutline(sf::Vector2f center, float radius, sf:
 
     if (innerRadius < 0) innerRadius = 0;
 
-    for (int i = 0; i < CIRCLE_SEGMENTS; ++i)
+    for (int i = 0; i < Constants::System::CIRCLE_SEGMENTS; ++i)
     {
-        float angle1 = (static_cast<float>(i) / CIRCLE_SEGMENTS) * 2.0f * 3.14159265f;
-        float angle2 = (static_cast<float>(i + 1) / CIRCLE_SEGMENTS) * 2.0f * 3.14159265f;
+        float angle1 = (static_cast<float>(i) / Constants::System::CIRCLE_SEGMENTS) * 2.0f * Constants::Math::PI;
+        float angle2 = (static_cast<float>(i + 1) / Constants::System::CIRCLE_SEGMENTS) * 2.0f * Constants::Math::PI;
 
         // Outer vertices
         sf::Vector2f outer1(center.x + std::cos(angle1) * outerRadius,
@@ -62,10 +62,10 @@ void BatchRenderer::generateCircleOutline(sf::Vector2f center, float radius, sf:
 void BatchRenderer::generateFilledCircle(sf::Vector2f center, float radius, sf::Color color)
 {
     // Generate filled circle using triangle fan
-    for (int i = 0; i < CIRCLE_SEGMENTS; ++i)
+    for (int i = 0; i < Constants::System::CIRCLE_SEGMENTS; ++i)
     {
-        float angle1 = (static_cast<float>(i) / CIRCLE_SEGMENTS) * 2.0f * 3.14159265f;
-        float angle2 = (static_cast<float>(i + 1) / CIRCLE_SEGMENTS) * 2.0f * 3.14159265f;
+        float angle1 = (static_cast<float>(i) / Constants::System::CIRCLE_SEGMENTS) * 2.0f * Constants::Math::PI;
+        float angle2 = (static_cast<float>(i + 1) / Constants::System::CIRCLE_SEGMENTS) * 2.0f * Constants::Math::PI;
 
         sf::Vector2f p1(center.x + std::cos(angle1) * radius,
                        center.y + std::sin(angle1) * radius);

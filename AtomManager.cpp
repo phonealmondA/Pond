@@ -18,9 +18,9 @@ PathFollowingAtom::PathFollowingAtom(const RingShape& shape1, const RingShape& s
     m_energy = calculateInterferenceEnergy(shape1.color, shape2.color);
 
     // OPTIMIZED: Scale atom size based on energy level
-    m_radius = 1.8f + (m_energy * 0.025f); // Slightly larger than old static atoms
-    m_maxLifetime = 5.f + (m_energy * 0.02f); // OPTIMIZED: Reduced lifetime slightly
-    m_fadeStartTime = m_maxLifetime * 0.7f; // Start fading at 70% of lifetime
+    m_radius = Constants::Atom::RADIUS_BASE + (m_energy * Constants::Atom::RADIUS_ENERGY_FACTOR); // Slightly larger than old static atoms
+    m_maxLifetime = Constants::Atom::LIFETIME_BASE + (m_energy * Constants::Atom::LIFETIME_ENERGY_FACTOR); // OPTIMIZED: Reduced lifetime slightly
+    m_fadeStartTime = m_maxLifetime * Constants::Atom::FADE_START_RATIO; // Start fading at 70% of lifetime
 
     // Set up the visual shape
     m_shape.setRadius(m_radius);
@@ -63,28 +63,28 @@ void PathFollowingAtom::update(float deltaTime, const std::vector<RingShape>& al
     m_currentPosition = calculateIntersectionPoint(currentShape1, currentShape2);
 
     // Create pulsing effect based on energy
-    float pulseFrequency = 1.8f + (m_energy * 0.06f); // Higher energy = faster pulse
-    float pulseIntensity = 0.3f + (m_energy * 0.01f); // Higher energy = more intense pulse
+    float pulseFrequency = Constants::Atom::PULSE_FREQUENCY_BASE + (m_energy * Constants::Atom::PULSE_FREQUENCY_ENERGY_FACTOR); // Higher energy = faster pulse
+    float pulseIntensity = Constants::Atom::PULSE_INTENSITY_BASE + (m_energy * Constants::Atom::PULSE_INTENSITY_ENERGY_FACTOR); // Higher energy = more intense pulse
     float pulse = std::sin(m_pulseTimer * pulseFrequency) * pulseIntensity + 1.0f;
 
     // Apply pulsing to color
     sf::Color pulsingColor = m_color;
-    pulsingColor.r = static_cast<std::uint8_t>(std::min(255.0f, m_color.r * pulse));
-    pulsingColor.g = static_cast<std::uint8_t>(std::min(255.0f, m_color.g * pulse));
-    pulsingColor.b = static_cast<std::uint8_t>(std::min(255.0f, m_color.b * pulse));
+    pulsingColor.r = static_cast<std::uint8_t>(std::min(Constants::Math::COLOR_MAX, m_color.r * pulse));
+    pulsingColor.g = static_cast<std::uint8_t>(std::min(Constants::Math::COLOR_MAX, m_color.g * pulse));
+    pulsingColor.b = static_cast<std::uint8_t>(std::min(Constants::Math::COLOR_MAX, m_color.b * pulse));
 
     // Fade out near end of lifetime
     if (m_lifetime > m_fadeStartTime)
     {
         float fadeRatio = (m_lifetime - m_fadeStartTime) / (m_maxLifetime - m_fadeStartTime);
         float fadeAmount = 1.0f - fadeRatio;
-        pulsingColor.a = static_cast<std::uint8_t>(255 * fadeAmount);
+        pulsingColor.a = static_cast<std::uint8_t>(Constants::Math::COLOR_MAX * fadeAmount);
     }
 
     m_shape.setFillColor(pulsingColor);
 
     // Slight size pulsing based on energy
-    float sizeMultiplier = 1.0f + (std::sin(m_pulseTimer * pulseFrequency) * 0.2f * m_energy * 0.01f);
+    float sizeMultiplier = 1.0f + (std::sin(m_pulseTimer * pulseFrequency) * Constants::Atom::SIZE_PULSE_FACTOR * m_energy * Constants::Atom::SIZE_PULSE_ENERGY_FACTOR);
     float currentRadius = m_radius * sizeMultiplier;
     m_shape.setRadius(currentRadius);
     m_shape.setPosition(sf::Vector2f(m_currentPosition.x - currentRadius, m_currentPosition.y - currentRadius));
@@ -189,9 +189,9 @@ bool PathFollowingAtom::circlesIntersect(const RingShape& shape1, const RingShap
 sf::Color PathFollowingAtom::calculateInterferenceColor(const sf::Color& color1, const sf::Color& color2)
 {
     // Additive color mixing (like light interference)
-    int r = std::min(255, static_cast<int>(color1.r) + static_cast<int>(color2.r));
-    int g = std::min(255, static_cast<int>(color1.g) + static_cast<int>(color2.g));
-    int b = std::min(255, static_cast<int>(color1.b) + static_cast<int>(color2.b));
+    int r = std::min(static_cast<int>(Constants::Math::COLOR_MAX), static_cast<int>(color1.r) + static_cast<int>(color2.r));
+    int g = std::min(static_cast<int>(Constants::Math::COLOR_MAX), static_cast<int>(color1.g) + static_cast<int>(color2.g));
+    int b = std::min(static_cast<int>(Constants::Math::COLOR_MAX), static_cast<int>(color1.b) + static_cast<int>(color2.b));
 
     return sf::Color(static_cast<std::uint8_t>(r),
         static_cast<std::uint8_t>(g),
@@ -209,13 +209,13 @@ float PathFollowingAtom::calculateInterferenceEnergy(const sf::Color& color1, co
     float energyDifference = std::abs(energy1 - energy2);
 
     // Energy is based on sum but amplified by frequency difference
-    return energySum + (energyDifference * 0.4f);
+    return energySum + (energyDifference * Constants::Atom::ENERGY_DIFFERENCE_AMPLIFICATION);
 }
 
 bool PathFollowingAtom::shouldCreateInterference(const sf::Color& color1, const sf::Color& color2)
 {
     // Don't create interference for nearly identical colors
-    const int tolerance = 8;
+    const int tolerance = Constants::Atom::COLOR_TOLERANCE;
 
     return (std::abs(static_cast<int>(color1.r) - static_cast<int>(color2.r)) > tolerance ||
         std::abs(static_cast<int>(color1.g) - static_cast<int>(color2.g)) > tolerance ||
@@ -227,7 +227,7 @@ AtomManager::AtomManager()
     : m_nextSlot(0), m_atomCount(0)
 {
     m_atoms.resize(MAX_ATOMS);
-    m_spatialGrid = std::make_unique<SpatialGrid>(sf::Vector2u(800, 600), 200.0f);
+    m_spatialGrid = std::make_unique<SpatialGrid>(sf::Vector2u(800, 600), Constants::SpatialGrid::DEFAULT_CELL_SIZE);
 }
 
 // FIXED: Added windowSize parameter to match header declaration
@@ -239,7 +239,7 @@ void AtomManager::update(float deltaTime, const std::vector<Ring*>& rings, const
     // Update spatial grid dimensions if window size changed
     if (m_spatialGrid->m_windowSize.x != windowSize.x || m_spatialGrid->m_windowSize.y != windowSize.y)
     {
-        m_spatialGrid = std::make_unique<SpatialGrid>(windowSize, 200.0f);
+        m_spatialGrid = std::make_unique<SpatialGrid>(windowSize, Constants::SpatialGrid::DEFAULT_CELL_SIZE);
     }
 
     // Rebuild spatial grid with current shapes
@@ -257,7 +257,7 @@ void AtomManager::update(float deltaTime, const std::vector<Ring*>& rings, const
     {
         if (m_atoms[i])
         {
-            m_atoms[i]->update(deltaTime * 2.0f, allShapes); // Double delta to compensate for half update rate
+            m_atoms[i]->update(deltaTime * Constants::Atom::DELTA_TIME_COMPENSATION, allShapes); // Double delta to compensate for half update rate
         }
     }
 
@@ -407,7 +407,7 @@ void AtomManager::checkShapePairForNewIntersection(const RingShape& shape1, cons
     intersectionPoint.y = p.y - (h * dx) / distance;
 
     // FIXED: Check if intersection point is within screen bounds (with small margin)
-    float margin = 50.0f; // Allow atoms slightly off-screen in case they move on-screen
+    float margin = Constants::Atom::INTERSECTION_MARGIN; // Allow atoms slightly off-screen in case they move on-screen
     if (intersectionPoint.x >= -margin && intersectionPoint.x <= windowSize.x + margin &&
         intersectionPoint.y >= -margin && intersectionPoint.y <= windowSize.y + margin)
     {
@@ -472,7 +472,7 @@ void AtomManager::cleanupIntersectionTracking(const std::vector<RingShape>& allS
     cleanupCounter++;
 
     // Clean up every 600 frames (roughly every 10 seconds at 60 FPS)
-    if (cleanupCounter >= 600)
+    if (cleanupCounter >= Constants::Atom::CLEANUP_INTERVAL)
     {
         m_trackedIntersections.clear();
         cleanupCounter = 0;
@@ -489,7 +489,7 @@ inline bool AtomManager::circlesIntersectFast(const RingShape& shape1, const Rin
     distanceSquared = dx * dx + dy * dy;
 
     // Early exit if distance is zero
-    if (distanceSquared < 0.001f) return false;
+    if (distanceSquared < Constants::Math::EPSILON) return false;
 
     // Check intersection using squared distances (avoids sqrt)
     float sumRadii = shape1.radius + shape2.radius;

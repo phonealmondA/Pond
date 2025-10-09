@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <string>
 #include "SpatialGrid.h" // Need full definition for unique_ptr
+#include "Constants.h"
 
 class Ring; // Forward declaration
 
@@ -95,7 +96,7 @@ class AtomManager
 {
 private:
     // OPTIMIZED: Reduced from 50 to 35 for better performance
-    static const size_t MAX_ATOMS = 35;
+    static const size_t MAX_ATOMS = Constants::System::MAX_ATOMS;
 
     std::vector<std::unique_ptr<PathFollowingAtom>> m_atoms;
     size_t m_nextSlot; // FIFO insertion point

@@ -2,6 +2,7 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <unordered_map>
+#include "Constants.h"
 
 // Forward declaration to avoid circular dependency
 struct RingShape;
@@ -24,10 +25,10 @@ private:
     std::vector<int> getNeighborCells(float x, float y, float radius) const;
 
     // OPTIMIZED: Check if shape is near viewport (for culling off-screen shapes)
-    bool isNearViewport(const RingShape& shape, float margin = 200.0f) const;
+    bool isNearViewport(const RingShape& shape, float margin = Constants::SpatialGrid::NEAR_VIEWPORT_MARGIN) const;
 
 public:
-    SpatialGrid(const sf::Vector2u& windowSize, float cellSize = 200.0f);
+    SpatialGrid(const sf::Vector2u& windowSize, float cellSize = Constants::SpatialGrid::DEFAULT_CELL_SIZE);
 
     // Clear and rebuild grid with new shapes
     void rebuild(const std::vector<RingShape>& shapes);

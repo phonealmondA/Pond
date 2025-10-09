@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include "Proton.h"
+#include "Constants.h"
 
 // Forward declaration
 class PathFollowingAtom;
@@ -13,17 +14,8 @@ class Ring;
 class ProtonManager
 {
 private:
-    // Maximum protons (much lower than atoms for performance)
-    static const size_t MAX_PROTONS = 12;
-
     std::vector<std::unique_ptr<Proton>> m_protons;
     size_t m_nextSlot; // FIFO insertion point
-
-    // Physics parameters (tunable)
-    static constexpr float REPULSION_RANGE = 80.0f;
-    static constexpr float REPULSION_STRENGTH = 8000.0f;
-    static constexpr float MIN_ATOM_ENERGY_THRESHOLD = 150.0f;
-    static constexpr float MIN_COMBINED_ENERGY = 250.0f;
 
     // Track recent spawn positions to prevent duplicate spawns
     // Store position and remaining cooldown time
@@ -47,6 +39,7 @@ private:
     void updateProtonPhysics(float deltaTime, const sf::Vector2u& windowSize);
     void handleProtonProtonRepulsion(float deltaTime);
     void handleProtonProtonAbsorption();
+    void handleProtonAtomForces(float deltaTime, const AtomManager& atomManager);
 
     // Spawning from high-energy atom collisions
     void detectAndSpawnFromAtomCollisions(const AtomManager& atomManager);

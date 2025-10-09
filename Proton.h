@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include "Constants.h"
 
 // Proton - A rare, persistent physics particle spawned from high-energy atom collisions
 // Protons move independently, repel each other, and can absorb other protons
@@ -26,12 +27,6 @@ private:
     int m_neutronCount;
     bool m_isStableHydrogen;
     float m_waveFieldTimer;
-
-    // Physics parameters
-    static constexpr float FRICTION = 0.98f;
-    static constexpr float BOUNCE_DAMPENING = 0.7f;
-    static constexpr float MIN_RADIUS = 3.0f;
-    static constexpr float MAX_RADIUS = 8.0f;
 
 public:
     Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy);
@@ -64,7 +59,7 @@ public:
     void absorbProton(const Proton& other);
 
     // Charge state mechanics
-    void tryNeutronFormation(float deltaTime, bool insideWaveField);
+    void tryNeutronFormation(float deltaTime, bool nearAtom);
     bool tryCaptureElectron(const class PathFollowingAtom& electron);
 
 private:

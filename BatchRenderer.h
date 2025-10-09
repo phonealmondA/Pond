@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include "Constants.h"
 
 // Batch renderer to reduce draw calls significantly
 // Instead of drawing each circle individually, we batch them into a single vertex array
@@ -9,9 +10,6 @@ class BatchRenderer
 private:
     sf::VertexArray m_vertices;
     std::vector<sf::Vertex> m_tempVertices;
-
-    // Circle approximation quality
-    static const int CIRCLE_SEGMENTS = 24; // Good balance between quality and performance
 
     // Generate vertices for a circle outline
     void generateCircleOutline(sf::Vector2f center, float radius, sf::Color color, float thickness);

@@ -15,7 +15,7 @@ int SpatialGrid::getCellIndex(float x, float y) const
     int gridY = static_cast<int>(std::floor(y / m_cellSize));
 
     // Calculate grid dimensions
-    int gridWidth = static_cast<int>(std::ceil(m_windowSize.x / m_cellSize)) + 4; // +4 for margin
+    int gridWidth = static_cast<int>(std::ceil(m_windowSize.x / m_cellSize)) + Constants::SpatialGrid::GRID_MARGIN_CELLS; // +4 for margin
 
     // Return unique cell index
     return gridY * gridWidth + gridX;
@@ -37,7 +37,7 @@ std::vector<int> SpatialGrid::getNeighborCells(float x, float y, float radius) c
     int minCellY = static_cast<int>(std::floor(minY / m_cellSize));
     int maxCellY = static_cast<int>(std::floor(maxY / m_cellSize));
 
-    int gridWidth = static_cast<int>(std::ceil(m_windowSize.x / m_cellSize)) + 4;
+    int gridWidth = static_cast<int>(std::ceil(m_windowSize.x / m_cellSize)) + Constants::SpatialGrid::GRID_MARGIN_CELLS;
 
     // Add all cells in range
     for (int cy = minCellY; cy <= maxCellY; ++cy)
@@ -63,7 +63,7 @@ void SpatialGrid::rebuild(const std::vector<RingShape>& shapes)
     {
         // OPTIMIZED: Skip shapes that are completely off-screen with margin
         // This dramatically reduces collision checks for off-screen shapes
-        if (!isNearViewport(shape, 200.0f))
+        if (!isNearViewport(shape, Constants::SpatialGrid::VIEWPORT_MARGIN))
         {
             continue; // Skip this shape entirely - won't participate in collision checks
         }
@@ -84,7 +84,7 @@ std::vector<const RingShape*> SpatialGrid::getPotentialIntersections(const RingS
     std::vector<const RingShape*> potentialShapes;
 
     // OPTIMIZED: Reserve capacity (rough estimate)
-    potentialShapes.reserve(32);
+    potentialShapes.reserve(Constants::SpatialGrid::POTENTIAL_INTERSECTIONS_RESERVE);
 
     // Get all cells this shape overlaps
     std::vector<int> cells = getNeighborCells(shape.center.x, shape.center.y, shape.radius);

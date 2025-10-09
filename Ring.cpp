@@ -10,20 +10,20 @@
 float Ring::calculateFrequencyBasedSpeed(const sf::Color& color)
 {
     // Frequency-based formula: blue dominant = fastest, red dominant = slowest
-    // Blue gets highest weight (0.6), green medium (0.3), red lowest (0.1)
-    float speedFactor = (color.r * 0.1f + color.g * 0.3f + color.b * 0.6f) / 255.0f;
+    // Blue gets highest weight, green medium, red lowest
+    float speedFactor = (color.r * Constants::Ring::COLOR_WEIGHT_RED +
+                         color.g * Constants::Ring::COLOR_WEIGHT_GREEN +
+                         color.b * Constants::Ring::COLOR_WEIGHT_BLUE) / Constants::Math::COLOR_MAX;
 
-    // Map to speed range: 20 (slowest) to 120 (fastest) pixels per second
-    float minSpeed = 20.0f;
-    float maxSpeed = 120.0f;
-    float speed = minSpeed + (speedFactor * (maxSpeed - minSpeed));
+    // Map to speed range: slowest to fastest pixels per second
+    float speed = Constants::Ring::MIN_SPEED + (speedFactor * (Constants::Ring::MAX_SPEED - Constants::Ring::MIN_SPEED));
 
     return speed;
 }
 
 // Ring class implementation with bouncing and frequency-based speed
 Ring::Ring(sf::Vector2f center, sf::Color color, float thickness)
-    : m_center(center), m_originalCenter(center), m_currentRadius(5.f),
+    : m_center(center), m_originalCenter(center), m_currentRadius(Constants::Ring::INITIAL_RADIUS),
     m_color(color), m_isAlive(true), m_thickness(thickness)
 {
     // Calculate growth speed based on color frequency
@@ -70,10 +70,10 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
 
     // OPTIMIZED: Cache bounce color calculation (used multiple times)
     const sf::Color bounceColor(m_color.r, m_color.g, m_color.b,
-                                static_cast<std::uint8_t>(m_color.a * 0.7f)); // 70% opacity for reflections
+                                static_cast<std::uint8_t>(m_color.a * Constants::Ring::BOUNCE_REFLECTION_OPACITY));
 
     // OPTIMIZED: Cache culling margin calculation
-    const float cullMargin = m_currentRadius + 100.0f; // Only create if within this distance of screen
+    const float cullMargin = m_currentRadius + Constants::Ring::CULL_MARGIN;
 
     // Helper lambda to check if a bounce shape center would be near the screen
     auto isNearScreen = [&](float x, float y) -> bool {
@@ -105,7 +105,7 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     if (m_bounceData.hasBouncedRight)
     {
         // Reflect across right wall
-        float reflectedX = 2 * windowWidth - m_originalCenter.x;
+        float reflectedX = Constants::Ring::WINDOW_WIDTH_MULTIPLIER * windowWidth - m_originalCenter.x;
         // OPTIMIZED: Only create if near screen
         if (isNearScreen(reflectedX, m_originalCenter.y))
         {
@@ -137,7 +137,7 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     if (m_bounceData.hasBouncedBottom)
     {
         // Reflect across bottom wall
-        float reflectedY = 2 * windowHeight - m_originalCenter.y;
+        float reflectedY = Constants::Ring::WINDOW_HEIGHT_MULTIPLIER * windowHeight - m_originalCenter.y;
         // OPTIMIZED: Only create if near screen
         if (isNearScreen(m_originalCenter.x, reflectedY))
         {
@@ -211,7 +211,7 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     updateBounceShapes(windowSize);
 
     // OPTIMIZED: Kill ring when it gets too large (prevents infinite growth)
-    if (m_currentRadius > 2000.f) // Adjust this value as needed
+    if (m_currentRadius > Constants::Ring::MAX_RADIUS_THRESHOLD)
     {
         m_isAlive = false;
         return; // OPTIMIZED: Early exit
@@ -221,10 +221,9 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     // This prevents off-screen rings from participating in collision detection
     const float windowWidth = static_cast<float>(windowSize.x);
     const float windowHeight = static_cast<float>(windowSize.y);
-    const float offScreenMargin = 500.0f; // Kill if center is 500+ pixels beyond window bounds
 
-    if (m_center.x < -offScreenMargin || m_center.x > windowWidth + offScreenMargin ||
-        m_center.y < -offScreenMargin || m_center.y > windowHeight + offScreenMargin)
+    if (m_center.x < -Constants::Ring::OFF_SCREEN_MARGIN || m_center.x > windowWidth + Constants::Ring::OFF_SCREEN_MARGIN ||
+        m_center.y < -Constants::Ring::OFF_SCREEN_MARGIN || m_center.y > windowHeight + Constants::Ring::OFF_SCREEN_MARGIN)
     {
         m_isAlive = false;
         return; // OPTIMIZED: Early exit for far off-screen rings
@@ -232,7 +231,7 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
 
     // OPTIMIZED: Cache alpha calculation - fade out as ring gets bigger
     // Calculate alpha only once and reuse
-    std::uint8_t alpha = static_cast<std::uint8_t>(255 * std::max(0.1f, 1.0f - m_currentRadius / 800.f));
+    std::uint8_t alpha = static_cast<std::uint8_t>(Constants::Math::COLOR_MAX * std::max(Constants::Ring::MINIMUM_ALPHA, 1.0f - m_currentRadius / Constants::Ring::ALPHA_CALCULATION_DIVISOR));
     sf::Color fadedColor = m_color;
     fadedColor.a = alpha;
     m_shape.setOutlineColor(fadedColor);
@@ -285,7 +284,7 @@ void Ring::reset(sf::Vector2f newCenter)
 {
     m_center = newCenter;
     m_originalCenter = newCenter;
-    m_currentRadius = 5.f;
+    m_currentRadius = Constants::Ring::RESET_RADIUS;
     m_isAlive = true;
     m_bounceData = BounceData(); // Reset bounce data
     m_bounceShapes.clear();
@@ -324,43 +323,7 @@ RingManager::RingManager()
     : m_randomGen(std::random_device{}()), m_currentColorIndex(0)
 {
     // Initialize predefined colors for rings (ordered from lowest to highest frequency/speed)
-    m_colors = {
-        sf::Color(44, 0, 0),      // Darkest red - slowest
-        sf::Color(84, 0, 0),      // Very dark red - extremely slow
-        sf::Color(108, 0, 0),     // Very dark red - extremely slow
-        sf::Color(138, 0, 0),     // Dark red - very slow  
-        sf::Color(162, 0, 0),     // Dark red - very slow  
-        sf::Color(182, 0, 0),     // Dark red - very slow  
-        sf::Color(192, 0, 0),     // Dark red - very slow  
-        sf::Color(212, 0, 0),     // Medium-dark red - slow
-        sf::Color(255, 0, 0),     // Red - pure red
-        sf::Color(255, 42, 0),    // Red + small green
-        sf::Color(255, 84, 0),    // Red + more green (orange-ish)
-        sf::Color(255, 128, 0),   // Red + medium green (orange)
-        sf::Color(255, 165, 0),   // Orange
-        sf::Color(255, 200, 0),   // Yellow-orange
-        sf::Color(255, 255, 0),   // Yellow
-        sf::Color(200, 255, 0),   // Yellow-green
-        sf::Color(128, 255, 0),   // Lime green
-        sf::Color(0, 255, 0),     // Green
-        sf::Color(0, 255, 84),    // Green + small blue
-        sf::Color(0, 255, 128),   // Green + more blue (spring green)
-        sf::Color(0, 255, 200),   // Green + high blue (cyan-ish)
-        sf::Color(0, 255, 255),   // Cyan
-        sf::Color(0, 200, 255),   // Sky blue
-        sf::Color(0, 128, 255),   // Light blue
-        sf::Color(0, 84, 255),    // Blue + small green
-        sf::Color(0, 0, 255),     // Blue
-        sf::Color(84, 0, 255),    // Blue + small red (purple)
-        sf::Color(128, 0, 255),   // Purple
-        sf::Color(200, 0, 255),   // Magenta-purple
-        sf::Color(255, 0, 255),   // Magenta
-        sf::Color(255, 0, 200),   // Pink-magenta
-        sf::Color(255, 84, 255),  // Light magenta
-        sf::Color(255, 128, 255), // Light pink
-        sf::Color(255, 200, 255), // Very light pink
-        sf::Color(255, 255, 255)  // White - fastest
-    };
+    m_colors.assign(Constants::RingColors::COLORS, Constants::RingColors::COLORS + Constants::System::COLOR_PALETTE_SIZE);
 
     m_currentColor = m_colors[m_currentColorIndex];
 }
@@ -455,10 +418,10 @@ std::string RingManager::getCurrentFrequencyInfo() const
     oss << getCurrentColorString() << " - Speed: " << std::fixed << std::setprecision(1) << speed << " px/s";
 
     // Add frequency description
-    if (speed < 40.0f) {
+    if (speed < Constants::Ring::LOW_FREQUENCY_THRESHOLD) {
         oss << " (Low frequency)";
     }
-    else if (speed < 80.0f) {
+    else if (speed < Constants::Ring::MEDIUM_FREQUENCY_THRESHOLD) {
         oss << " (Medium frequency)";
     }
     else {
