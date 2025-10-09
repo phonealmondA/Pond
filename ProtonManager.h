@@ -7,6 +7,7 @@
 // Forward declaration
 class PathFollowingAtom;
 class AtomManager;
+class Ring;
 
 // ProtonManager - Manages all protons with physics interactions and spawning
 class ProtonManager
@@ -32,7 +33,7 @@ public:
     ProtonManager();
 
     // Main update - physics, interactions, and spawning from atoms
-    void update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager);
+    void update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager, const std::vector<Ring*>& rings);
 
     // Render all protons to batch renderer
     void addToBatch(class BatchRenderer& batchRenderer) const;

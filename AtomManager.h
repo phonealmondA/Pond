@@ -44,6 +44,7 @@ private:
     float m_lifetime;
     float m_maxLifetime;
     bool m_isAlive;
+    bool m_markedForDeletion;
 
     // Visual effects
     float m_pulseTimer;
@@ -64,10 +65,11 @@ public:
     // OPTIMIZED: Add to batch renderer
     void addToBatch(class BatchRenderer& batchRenderer) const;
 
-    bool isAlive() const { return m_isAlive && m_hasValidShapes; }
+    bool isAlive() const { return m_isAlive && m_hasValidShapes && !m_markedForDeletion; }
     float getLifetime() const { return m_lifetime; }
     sf::Vector2f getPosition() const { return m_currentPosition; }
     float getEnergy() const { return m_energy; }
+    void markForDeletion() { m_markedForDeletion = true; }
 
     // Check if this atom is tracking the given shape pair
     bool isTrackingShapes(const RingShape& shape1, const RingShape& shape2) const;

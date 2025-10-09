@@ -1,5 +1,6 @@
 #include "Proton.h"
 #include "BatchRenderer.h"
+#include "AtomManager.h"
 #include <cmath>
 #include <algorithm>
 
@@ -12,6 +13,10 @@ Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, fl
     , m_markedForDeletion(false)
     , m_lifetime(0.0f)
     , m_pulseTimer(0.0f)
+    , m_charge(+1)
+    , m_neutronCount(0)
+    , m_isStableHydrogen(false)
+    , m_waveFieldTimer(0.0f)
 {
     m_radius = calculateRadius(energy);
     m_mass = calculateMass(energy);
@@ -53,6 +58,28 @@ void Proton::addToBatch(BatchRenderer& batchRenderer) const
     // Calculate visual properties based on lifetime
     sf::Color renderColor = m_color;
     float renderRadius = m_radius;
+
+    // Apply charge state visual feedback
+    if (m_isStableHydrogen)
+    {
+        // Stable hydrogen: bright white
+        renderColor.r = 255;
+        renderColor.g = 255;
+        renderColor.b = 255;
+        renderRadius *= 1.3f;
+    }
+    else if (m_charge == 0)
+    {
+        // Neutral with neutron: gray-white
+        renderColor.r = 200;
+        renderColor.g = 200;
+        renderColor.b = 200;
+    }
+    else if (m_charge == +1)
+    {
+        // Bare proton: slight red tint
+        renderColor.r = static_cast<std::uint8_t>(std::min(255, static_cast<int>(renderColor.r * 1.2f)));
+    }
 
     // Pulsing effect based on energy
     float pulseFrequency = 2.0f + (m_energy * 0.01f);
@@ -148,4 +175,55 @@ void Proton::handleBoundaryCollision(const sf::Vector2u& windowSize)
         m_velocity.y = -m_velocity.y * BOUNCE_DAMPENING;
         collided = true;
     }
+}
+
+void Proton::tryNeutronFormation(float deltaTime, bool insideWaveField)
+{
+    // Already has neutron, skip
+    if (m_charge != +1) return;
+
+    // Not in wave field, reset timer
+    if (!insideWaveField)
+    {
+        m_waveFieldTimer = 0.0f;
+        return;
+    }
+
+    // Inside wave field, accumulate time
+    m_waveFieldTimer += deltaTime;
+
+    // Check if neutron formation threshold reached
+    if (m_waveFieldTimer >= 3.0f)
+    {
+        m_neutronCount = 1;
+        m_charge = 0;
+        m_radius *= 1.2f;
+        m_waveFieldTimer = 0.0f;
+    }
+}
+
+bool Proton::tryCaptureElectron(const PathFollowingAtom& electron)
+{
+    // Need to have neutral charge (needs neutron first)
+    if (m_charge != 0) return false;
+
+    // Need to have exactly 1 neutron
+    if (m_neutronCount != 1) return false;
+
+    // Already stable, skip
+    if (m_isStableHydrogen) return false;
+
+    // Calculate distance to electron
+    sf::Vector2f delta = electron.getPosition() - m_position;
+    float distance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+
+    // Check if electron is close enough to capture
+    if (distance < 15.0f)
+    {
+        m_isStableHydrogen = true;
+        m_maxLifetime = -1.0f; // Never die from age
+        return true;
+    }
+
+    return false;
 }

@@ -133,7 +133,7 @@ int main()
         atomManager.update(deltaTime, allRings, window.getSize());
 
         // Update protons (physics, interactions, spawning from atom collisions)
-        protonManager.update(deltaTime, window.getSize(), atomManager);
+        protonManager.update(deltaTime, window.getSize(), atomManager, allRings);
 
         // OPTIMIZED: Removed periodic status spam (was every 5 seconds)
         // Use this for debugging if needed

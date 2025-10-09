@@ -21,6 +21,12 @@ private:
     float m_pulseTimer;
     float m_fadeStartTime;
 
+    // Charge state system for hydrogen formation
+    int m_charge;
+    int m_neutronCount;
+    bool m_isStableHydrogen;
+    float m_waveFieldTimer;
+
     // Physics parameters
     static constexpr float FRICTION = 0.98f;
     static constexpr float BOUNCE_DAMPENING = 0.7f;
@@ -45,6 +51,9 @@ public:
     float getEnergy() const { return m_energy; }
     float getMass() const { return m_mass; }
     sf::Color getColor() const { return m_color; }
+    int getCharge() const { return m_charge; }
+    int getNeutronCount() const { return m_neutronCount; }
+    bool isStableHydrogen() const { return m_isStableHydrogen; }
 
     // Setters for physics interactions
     void setVelocity(sf::Vector2f velocity) { m_velocity = velocity; }
@@ -53,6 +62,10 @@ public:
 
     // Proton interactions
     void absorbProton(const Proton& other);
+
+    // Charge state mechanics
+    void tryNeutronFormation(float deltaTime, bool insideWaveField);
+    bool tryCaptureElectron(const class PathFollowingAtom& electron);
 
 private:
     // Calculate radius from energy

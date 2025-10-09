@@ -10,7 +10,7 @@
 // PathFollowingAtom implementation
 PathFollowingAtom::PathFollowingAtom(const RingShape& shape1, const RingShape& shape2, sf::Vector2f initialPosition)
     : m_currentPosition(initialPosition), m_previousPosition(initialPosition),
-    m_lifetime(0.f), m_isAlive(true), m_pulseTimer(0.f),
+    m_lifetime(0.f), m_isAlive(true), m_markedForDeletion(false), m_pulseTimer(0.f),
     m_shape1(shape1), m_shape2(shape2), m_hasValidShapes(true)
 {
     // Calculate interference properties

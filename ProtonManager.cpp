@@ -1,6 +1,7 @@
 #include "ProtonManager.h"
 #include "AtomManager.h"
 #include "BatchRenderer.h"
+#include "Ring.h"
 #include <cmath>
 #include <random>
 
@@ -10,13 +11,72 @@ ProtonManager::ProtonManager()
     m_protons.resize(MAX_PROTONS);
 }
 
-void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager)
+void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager, const std::vector<Ring*>& rings)
 {
     // Update cooldowns
     updateCooldowns(deltaTime);
 
     // Update physics for all protons
     updateProtonPhysics(deltaTime, windowSize);
+
+    // Check protons for wave field interactions (neutron formation)
+    for (auto& proton : m_protons)
+    {
+        if (proton && proton->isAlive())
+        {
+            bool insideWaveField = false;
+
+            // Check if proton is inside any ring
+            sf::Vector2f protonPos = proton->getPosition();
+            for (Ring* ring : rings)
+            {
+                if (ring && ring->isAlive())
+                {
+                    sf::Vector2f ringCenter = ring->getCenter();
+                    float ringRadius = ring->getRadius();
+
+                    // Calculate distance from proton to ring center
+                    float dx = protonPos.x - ringCenter.x;
+                    float dy = protonPos.y - ringCenter.y;
+                    float distance = std::sqrt(dx * dx + dy * dy);
+
+                    // Proton is inside ring if distance < radius
+                    if (distance < ringRadius)
+                    {
+                        insideWaveField = true;
+                        break;
+                    }
+                }
+            }
+
+            // Try neutron formation based on wave field status
+            proton->tryNeutronFormation(deltaTime, insideWaveField);
+        }
+    }
+
+    // Check for electron capture (for neutral protons with neutron)
+    for (auto& proton : m_protons)
+    {
+        if (proton && proton->isAlive() && proton->getCharge() == 0 && proton->getNeutronCount() == 1)
+        {
+            // Get all atoms from atom manager
+            const auto& atoms = atomManager.getAtoms();
+
+            for (const auto& atom : atoms)
+            {
+                if (atom && atom->isAlive())
+                {
+                    // Try to capture this electron
+                    if (proton->tryCaptureElectron(*atom))
+                    {
+                        // Electron was captured, mark atom for deletion
+                        atom->markForDeletion();
+                        break; // One electron per proton
+                    }
+                }
+            }
+        }
+    }
 
     // Handle proton-proton interactions
     handleProtonProtonRepulsion(deltaTime);
@@ -25,12 +85,16 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
     // Detect high-energy atom collisions and spawn new protons
     detectAndSpawnFromAtomCollisions(atomManager);
 
-    // Remove dead protons and protons marked for deletion
+    // Remove dead protons and protons marked for deletion (but preserve stable hydrogen)
     for (auto& proton : m_protons)
     {
         if (proton && (!proton->isAlive() || proton->isMarkedForDeletion()))
         {
-            proton.reset();
+            // Never remove stable hydrogen
+            if (!proton->isStableHydrogen())
+            {
+                proton.reset();
+            }
         }
     }
 }
@@ -50,7 +114,11 @@ void ProtonManager::clear()
 {
     for (auto& proton : m_protons)
     {
-        proton.reset();
+        // Only reset unstable protons - stable hydrogen survives clear
+        if (proton && !proton->isStableHydrogen())
+        {
+            proton.reset();
+        }
     }
     m_nextSlot = 0;
     m_spawnCooldowns.clear();
@@ -61,7 +129,8 @@ size_t ProtonManager::getProtonCount() const
     size_t count = 0;
     for (const auto& proton : m_protons)
     {
-        if (proton && proton->isAlive())
+        // Only count unstable protons - stable hydrogen doesn't count toward MAX_PROTONS limit
+        if (proton && proton->isAlive() && !proton->isStableHydrogen())
         {
             count++;
         }
@@ -130,9 +199,15 @@ void ProtonManager::handleProtonProtonAbsorption()
     {
         if (!m_protons[i] || !m_protons[i]->isAlive()) continue;
 
+        // Skip stable hydrogen - it never gets absorbed
+        if (m_protons[i]->isStableHydrogen()) continue;
+
         for (size_t j = i + 1; j < m_protons.size(); ++j)
         {
             if (!m_protons[j] || !m_protons[j]->isAlive()) continue;
+
+            // Skip stable hydrogen - it never gets absorbed
+            if (m_protons[j]->isStableHydrogen()) continue;
 
             // Calculate distance between protons
             sf::Vector2f pos1 = m_protons[i]->getPosition();
@@ -265,9 +340,22 @@ void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf
     // Check if we have space
     if (getProtonCount() >= MAX_PROTONS)
     {
-        // FIFO replacement - find oldest slot
-        m_protons[m_nextSlot] = std::make_unique<Proton>(position, velocity, color, energy);
-        m_nextSlot = (m_nextSlot + 1) % MAX_PROTONS;
+        // FIFO replacement - find oldest unstable slot (skip stable hydrogen)
+        size_t attempts = 0;
+        while (attempts < MAX_PROTONS)
+        {
+            if (!m_protons[m_nextSlot] ||
+                (!m_protons[m_nextSlot]->isAlive()) ||
+                (!m_protons[m_nextSlot]->isStableHydrogen()))
+            {
+                // Found a slot that can be replaced
+                m_protons[m_nextSlot] = std::make_unique<Proton>(position, velocity, color, energy);
+                m_nextSlot = (m_nextSlot + 1) % MAX_PROTONS;
+                break;
+            }
+            m_nextSlot = (m_nextSlot + 1) % MAX_PROTONS;
+            attempts++;
+        }
     }
     else
     {
