@@ -25,10 +25,10 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
     // Detect high-energy atom collisions and spawn new protons
     detectAndSpawnFromAtomCollisions(atomManager);
 
-    // Remove dead protons
+    // Remove dead protons and protons marked for deletion
     for (auto& proton : m_protons)
     {
-        if (proton && !proton->isAlive())
+        if (proton && (!proton->isAlive() || proton->isMarkedForDeletion()))
         {
             proton.reset();
         }
@@ -53,7 +53,7 @@ void ProtonManager::clear()
         proton.reset();
     }
     m_nextSlot = 0;
-    m_atomCollisionCooldowns.clear();
+    m_spawnCooldowns.clear();
 }
 
 size_t ProtonManager::getProtonCount() const
@@ -152,12 +152,13 @@ void ProtonManager::handleProtonProtonAbsorption()
                 if (m_protons[i]->getEnergy() >= m_protons[j]->getEnergy())
                 {
                     m_protons[i]->absorbProton(*m_protons[j]);
-                    m_protons[j].reset(); // Remove absorbed proton
+                    m_protons[j]->markForDeletion(); // Mark for deletion instead of immediate reset
                 }
                 else
                 {
                     m_protons[j]->absorbProton(*m_protons[i]);
-                    m_protons[i].reset(); // Remove absorbed proton
+                    m_protons[i]->markForDeletion(); // Mark for deletion instead of immediate reset
+                    break; // Exit inner loop since proton i is marked, can't continue with it
                 }
             }
         }
@@ -166,27 +167,97 @@ void ProtonManager::handleProtonProtonAbsorption()
 
 void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomManager)
 {
-    // NOTE: This is a simplified version since we can't directly access atoms
-    // In a full implementation, we'd need to add a friend declaration or public getter to AtomManager
-    // For now, this will be a placeholder that we'll implement properly once we integrate with AtomManager
+    // Struct to hold safe snapshot of atom data (no pointers)
+    struct AtomSnapshot
+    {
+        sf::Vector2f position;
+        float energy;
+    };
 
-    // TODO: Add atom collision detection once AtomManager provides access
-    // The logic should be:
-    // 1. Get all high-energy atoms from AtomManager
-    // 2. Check distances between all atom pairs
-    // 3. If two atoms are close enough (collision), spawn a proton
-    // 4. Add cooldown to prevent duplicate spawns
-}
+    // 1. Create safe snapshots of all high-energy atoms (copy data, don't store pointers)
+    std::vector<AtomSnapshot> highEnergyAtoms;
+    const auto& atoms = atomManager.getAtoms();
 
-bool ProtonManager::isHighEnergyAtom(const PathFollowingAtom& atom) const
-{
-    return atom.getEnergy() >= MIN_ATOM_ENERGY_THRESHOLD && atom.isAlive();
-}
+    for (const auto& atom : atoms)
+    {
+        if (atom && atom->isAlive() && atom->getEnergy() >= MIN_ATOM_ENERGY_THRESHOLD)
+        {
+            AtomSnapshot snapshot;
+            snapshot.position = atom->getPosition();
+            snapshot.energy = atom->getEnergy();
+            highEnergyAtoms.push_back(snapshot);
+        }
+    }
 
-std::vector<const PathFollowingAtom*> ProtonManager::getHighEnergyAtoms(const AtomManager& atomManager) const
-{
-    // TODO: Implement once AtomManager provides access
-    return std::vector<const PathFollowingAtom*>();
+    // 2. Check distances between all atom snapshot pairs
+    for (size_t i = 0; i < highEnergyAtoms.size(); ++i)
+    {
+        for (size_t j = i + 1; j < highEnergyAtoms.size(); ++j)
+        {
+            const AtomSnapshot& atom1 = highEnergyAtoms[i];
+            const AtomSnapshot& atom2 = highEnergyAtoms[j];
+
+            // 3. Calculate distance between atoms
+            float dx = atom2.position.x - atom1.position.x;
+            float dy = atom2.position.y - atom1.position.y;
+            float distSquared = dx * dx + dy * dy;
+
+            // Collision threshold (atoms are close)
+            const float COLLISION_THRESHOLD = 15.0f;
+            const float COLLISION_THRESHOLD_SQ = COLLISION_THRESHOLD * COLLISION_THRESHOLD;
+
+            // 4. If atoms collide and have sufficient combined energy, spawn a proton
+            if (distSquared < COLLISION_THRESHOLD_SQ)
+            {
+                float combinedEnergy = atom1.energy + atom2.energy;
+
+                if (combinedEnergy >= MIN_COMBINED_ENERGY)
+                {
+                    // Calculate spawn position (midpoint between atoms)
+                    sf::Vector2f spawnPos = (atom1.position + atom2.position) * 0.5f;
+
+                    // Check if this position is on cooldown
+                    bool hasCooldown = false;
+                    const float COOLDOWN_DIST = 20.0f; // Prevent spawns within 20 pixels of recent spawns
+                    const float COOLDOWN_DIST_SQ = COOLDOWN_DIST * COOLDOWN_DIST;
+
+                    for (const auto& cooldown : m_spawnCooldowns)
+                    {
+                        float cdx = spawnPos.x - cooldown.first.x;
+                        float cdy = spawnPos.y - cooldown.first.y;
+                        float cdDistSq = cdx * cdx + cdy * cdy;
+
+                        if (cdDistSq < COOLDOWN_DIST_SQ)
+                        {
+                            hasCooldown = true;
+                            break;
+                        }
+                    }
+
+                    if (hasCooldown) continue;
+
+                    // Calculate velocity (perpendicular to collision line, based on energy)
+                    sf::Vector2f collisionDir(dx, dy);
+                    float dist = std::sqrt(distSquared);
+                    if (dist > 0.001f) collisionDir /= dist;
+
+                    // Perpendicular direction (rotate 90 degrees)
+                    sf::Vector2f perpDir(-collisionDir.y, collisionDir.x);
+                    float speed = std::min(combinedEnergy * 0.5f, 200.0f); // Cap max speed
+                    sf::Vector2f velocity = perpDir * speed;
+
+                    // Proton color (white for now - could mix atom colors if available)
+                    sf::Color protonColor = sf::Color::White;
+
+                    // Spawn the proton
+                    spawnProton(spawnPos, velocity, protonColor, combinedEnergy);
+
+                    // 5. Add cooldown to prevent duplicate spawns (0.5 seconds)
+                    m_spawnCooldowns.push_back(std::make_pair(spawnPos, 0.5f));
+                }
+            }
+        }
+    }
 }
 
 void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy)
@@ -216,15 +287,15 @@ void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf
 void ProtonManager::updateCooldowns(float deltaTime)
 {
     // Decrease all cooldown timers
-    for (auto& cooldown : m_atomCollisionCooldowns)
+    for (auto& cooldown : m_spawnCooldowns)
     {
         cooldown.second -= deltaTime;
     }
 
     // Remove expired cooldowns
-    m_atomCollisionCooldowns.erase(
-        std::remove_if(m_atomCollisionCooldowns.begin(), m_atomCollisionCooldowns.end(),
+    m_spawnCooldowns.erase(
+        std::remove_if(m_spawnCooldowns.begin(), m_spawnCooldowns.end(),
             [](const auto& cooldown) { return cooldown.second <= 0.0f; }),
-        m_atomCollisionCooldowns.end()
+        m_spawnCooldowns.end()
     );
 }

@@ -13,6 +13,7 @@ private:
     float m_radius;
     float m_mass;
     bool m_isAlive;
+    bool m_markedForDeletion;
     float m_lifetime;
     float m_maxLifetime;
 
@@ -36,7 +37,8 @@ public:
     void addToBatch(class BatchRenderer& batchRenderer) const;
 
     // Getters
-    bool isAlive() const { return m_isAlive; }
+    bool isAlive() const { return m_isAlive && !m_markedForDeletion; }
+    bool isMarkedForDeletion() const { return m_markedForDeletion; }
     sf::Vector2f getPosition() const { return m_position; }
     sf::Vector2f getVelocity() const { return m_velocity; }
     float getRadius() const { return m_radius; }
@@ -47,6 +49,7 @@ public:
     // Setters for physics interactions
     void setVelocity(sf::Vector2f velocity) { m_velocity = velocity; }
     void addVelocity(sf::Vector2f deltaVelocity) { m_velocity += deltaVelocity; }
+    void markForDeletion() { m_markedForDeletion = true; }
 
     // Proton interactions
     void absorbProton(const Proton& other);

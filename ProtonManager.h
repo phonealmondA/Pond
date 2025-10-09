@@ -24,8 +24,9 @@ private:
     static constexpr float MIN_ATOM_ENERGY_THRESHOLD = 150.0f;
     static constexpr float MIN_COMBINED_ENERGY = 250.0f;
 
-    // Track recent atom collisions to prevent duplicate spawns
-    std::vector<std::pair<const PathFollowingAtom*, float>> m_atomCollisionCooldowns; // atom pointer, cooldown timer
+    // Track recent spawn positions to prevent duplicate spawns
+    // Store position and remaining cooldown time
+    std::vector<std::pair<sf::Vector2f, float>> m_spawnCooldowns;
 
 public:
     ProtonManager();
@@ -48,12 +49,6 @@ private:
 
     // Spawning from high-energy atom collisions
     void detectAndSpawnFromAtomCollisions(const AtomManager& atomManager);
-
-    // Helper: Check if atom has energy above threshold
-    bool isHighEnergyAtom(const PathFollowingAtom& atom) const;
-
-    // Helper: Get atoms from AtomManager (need to access private members)
-    std::vector<const PathFollowingAtom*> getHighEnergyAtoms(const AtomManager& atomManager) const;
 
     // Spawn new proton
     void spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy);

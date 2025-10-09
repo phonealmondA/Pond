@@ -2,6 +2,7 @@
 #include <iostream>
 #include "Ring.h"
 #include "AtomManager.h"
+#include "ProtonManager.h"
 #include "BatchRenderer.h"
 
 int main()
@@ -14,6 +15,9 @@ int main()
 
     // Global atom manager with FIFO system (now invisible by default)
     AtomManager atomManager;
+
+    // Proton manager for high-energy particle physics
+    ProtonManager protonManager;
 
     // OPTIMIZED: Batch renderer for performance
     BatchRenderer batchRenderer;
@@ -106,7 +110,8 @@ int main()
                 {
                     ringManager.clear();
                     atomManager.clear();
-                    std::cout << "All rings and atoms cleared" << std::endl;
+                    protonManager.clear();
+                    std::cout << "All rings, atoms, and protons cleared" << std::endl;
                 }
                 else if (keyPress->code == sf::Keyboard::Key::D)
                 {
@@ -126,6 +131,9 @@ int main()
         // Update atoms and detect intersections
         std::vector<Ring*> allRings = ringManager.getAllRings();
         atomManager.update(deltaTime, allRings, window.getSize());
+
+        // Update protons (physics, interactions, spawning from atom collisions)
+        protonManager.update(deltaTime, window.getSize(), atomManager);
 
         // OPTIMIZED: Removed periodic status spam (was every 5 seconds)
         // Use this for debugging if needed
@@ -153,6 +161,7 @@ int main()
         if (debugShowAtoms) {
             atomManager.addToBatch(batchRenderer);  // Only render atoms in debug mode
         }
+        protonManager.addToBatch(batchRenderer);  // Always render protons
         batchRenderer.end(window);
 
         window.display();

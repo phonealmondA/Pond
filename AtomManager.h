@@ -131,6 +131,9 @@ public:
     inline size_t getAtomCount() const { return m_atomCount; }
     inline size_t getMaxAtoms() const { return MAX_ATOMS; }
 
+    // Access to atoms for ProtonManager collision detection
+    inline const std::vector<std::unique_ptr<PathFollowingAtom>>& getAtoms() const { return m_atoms; }
+
 private:
     // Intersection detection methods
     void detectNewIntersections(const std::vector<RingShape>& allShapes, const sf::Vector2u& windowSize);

@@ -9,6 +9,7 @@ Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, fl
     , m_color(color)
     , m_energy(energy)
     , m_isAlive(true)
+    , m_markedForDeletion(false)
     , m_lifetime(0.0f)
     , m_pulseTimer(0.0f)
 {

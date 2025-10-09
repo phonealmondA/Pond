@@ -144,6 +144,8 @@
     <ClCompile Include="BatchRenderer.cpp" />
     <ClCompile Include="events.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Proton.cpp" />
+    <ClCompile Include="ProtonManager.cpp" />
     <ClCompile Include="Ring.cpp" />
     <ClCompile Include="SpatialGrid.cpp" />
   </ItemGroup>
@@ -151,6 +153,8 @@
     <ClInclude Include="AtomManager.h" />
     <ClInclude Include="BatchRenderer.h" />
     <ClInclude Include="events.h" />
+    <ClInclude Include="Proton.h" />
+    <ClInclude Include="ProtonManager.h" />
     <ClInclude Include="Ring.h" />
     <ClInclude Include="SpatialGrid.h" />
   </ItemGroup>
