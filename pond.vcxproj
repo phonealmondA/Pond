@@ -141,14 +141,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AtomManager.cpp" />
+    <ClCompile Include="BatchRenderer.cpp" />
     <ClCompile Include="events.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Ring.cpp" />
+    <ClCompile Include="SpatialGrid.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AtomManager.h" />
+    <ClInclude Include="BatchRenderer.h" />
     <ClInclude Include="events.h" />
     <ClInclude Include="Ring.h" />
+    <ClInclude Include="SpatialGrid.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

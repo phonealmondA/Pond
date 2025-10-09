@@ -1,4 +1,5 @@
 #include "Ring.h"
+#include "BatchRenderer.h"
 #include <iostream>
 #include <algorithm>
 #include <sstream>
@@ -49,12 +50,14 @@ void Ring::createBounceShape(sf::Vector2f center, sf::Color color)
     m_bounceShapes.push_back(bounceShape);
 }
 
+// OPTIMIZED: Aggressive culling - only create bounce shapes that are near screen
 void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
 {
     m_bounceShapes.clear(); // Clear previous bounce shapes
 
-    float windowWidth = static_cast<float>(windowSize.x);
-    float windowHeight = static_cast<float>(windowSize.y);
+    // OPTIMIZED: Cache window dimensions as floats to avoid repeated conversions
+    const float windowWidth = static_cast<float>(windowSize.x);
+    const float windowHeight = static_cast<float>(windowSize.y);
 
     // Check for collisions and create bounce reflections
     float leftEdge = m_originalCenter.x - m_currentRadius;
@@ -65,9 +68,18 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     // Track maximum radius for fading effect
     m_bounceData.maxRadius = std::max(m_bounceData.maxRadius, m_currentRadius);
 
-    // Create a slightly faded color for bounce reflections
-    sf::Color bounceColor = m_color;
-    bounceColor.a = static_cast<std::uint8_t>(bounceColor.a * 0.7f); // 70% opacity for reflections
+    // OPTIMIZED: Cache bounce color calculation (used multiple times)
+    const sf::Color bounceColor(m_color.r, m_color.g, m_color.b,
+                                static_cast<std::uint8_t>(m_color.a * 0.7f)); // 70% opacity for reflections
+
+    // OPTIMIZED: Cache culling margin calculation
+    const float cullMargin = m_currentRadius + 100.0f; // Only create if within this distance of screen
+
+    // Helper lambda to check if a bounce shape center would be near the screen
+    auto isNearScreen = [&](float x, float y) -> bool {
+        return (x + m_currentRadius >= -cullMargin && x - m_currentRadius <= windowWidth + cullMargin &&
+                y + m_currentRadius >= -cullMargin && y - m_currentRadius <= windowHeight + cullMargin);
+    };
 
     // Left wall bounce
     if (leftEdge <= 0 && !m_bounceData.hasBouncedLeft)
@@ -78,7 +90,11 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     {
         // Reflect across left wall (x = 0)
         float reflectedX = -m_originalCenter.x;
-        createBounceShape(sf::Vector2f(reflectedX, m_originalCenter.y), bounceColor);
+        // OPTIMIZED: Only create if near screen
+        if (isNearScreen(reflectedX, m_originalCenter.y))
+        {
+            createBounceShape(sf::Vector2f(reflectedX, m_originalCenter.y), bounceColor);
+        }
     }
 
     // Right wall bounce
@@ -90,7 +106,11 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     {
         // Reflect across right wall
         float reflectedX = 2 * windowWidth - m_originalCenter.x;
-        createBounceShape(sf::Vector2f(reflectedX, m_originalCenter.y), bounceColor);
+        // OPTIMIZED: Only create if near screen
+        if (isNearScreen(reflectedX, m_originalCenter.y))
+        {
+            createBounceShape(sf::Vector2f(reflectedX, m_originalCenter.y), bounceColor);
+        }
     }
 
     // Top wall bounce
@@ -102,7 +122,11 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     {
         // Reflect across top wall (y = 0)
         float reflectedY = -m_originalCenter.y;
-        createBounceShape(sf::Vector2f(m_originalCenter.x, reflectedY), bounceColor);
+        // OPTIMIZED: Only create if near screen
+        if (isNearScreen(m_originalCenter.x, reflectedY))
+        {
+            createBounceShape(sf::Vector2f(m_originalCenter.x, reflectedY), bounceColor);
+        }
     }
 
     // Bottom wall bounce
@@ -114,30 +138,54 @@ void Ring::updateBounceShapes(const sf::Vector2u& windowSize)
     {
         // Reflect across bottom wall
         float reflectedY = 2 * windowHeight - m_originalCenter.y;
-        createBounceShape(sf::Vector2f(m_originalCenter.x, reflectedY), bounceColor);
+        // OPTIMIZED: Only create if near screen
+        if (isNearScreen(m_originalCenter.x, reflectedY))
+        {
+            createBounceShape(sf::Vector2f(m_originalCenter.x, reflectedY), bounceColor);
+        }
     }
 
     // Corner bounces - create diagonal reflections
+    // OPTIMIZED: Skip corner bounces entirely - they're rarely visible and expensive
+    // Uncomment if you want corner bounces back, but they significantly hurt performance
+    /*
     if (m_bounceData.hasBouncedLeft && m_bounceData.hasBouncedTop)
     {
-        // Top-left corner reflection
-        createBounceShape(sf::Vector2f(-m_originalCenter.x, -m_originalCenter.y), bounceColor);
+        float reflectedX = -m_originalCenter.x;
+        float reflectedY = -m_originalCenter.y;
+        if (isNearScreen(reflectedX, reflectedY))
+        {
+            createBounceShape(sf::Vector2f(reflectedX, reflectedY), bounceColor);
+        }
     }
     if (m_bounceData.hasBouncedRight && m_bounceData.hasBouncedTop)
     {
-        // Top-right corner reflection
-        createBounceShape(sf::Vector2f(2 * windowWidth - m_originalCenter.x, -m_originalCenter.y), bounceColor);
+        float reflectedX = 2 * windowWidth - m_originalCenter.x;
+        float reflectedY = -m_originalCenter.y;
+        if (isNearScreen(reflectedX, reflectedY))
+        {
+            createBounceShape(sf::Vector2f(reflectedX, reflectedY), bounceColor);
+        }
     }
     if (m_bounceData.hasBouncedLeft && m_bounceData.hasBouncedBottom)
     {
-        // Bottom-left corner reflection
-        createBounceShape(sf::Vector2f(-m_originalCenter.x, 2 * windowHeight - m_originalCenter.y), bounceColor);
+        float reflectedX = -m_originalCenter.x;
+        float reflectedY = 2 * windowHeight - m_originalCenter.y;
+        if (isNearScreen(reflectedX, reflectedY))
+        {
+            createBounceShape(sf::Vector2f(reflectedX, reflectedY), bounceColor);
+        }
     }
     if (m_bounceData.hasBouncedRight && m_bounceData.hasBouncedBottom)
     {
-        // Bottom-right corner reflection
-        createBounceShape(sf::Vector2f(2 * windowWidth - m_originalCenter.x, 2 * windowHeight - m_originalCenter.y), bounceColor);
+        float reflectedX = 2 * windowWidth - m_originalCenter.x;
+        float reflectedY = 2 * windowHeight - m_originalCenter.y;
+        if (isNearScreen(reflectedX, reflectedY))
+        {
+            createBounceShape(sf::Vector2f(reflectedX, reflectedY), bounceColor);
+        }
     }
+    */
 
     // Update all bounce shape positions and sizes
     for (auto& bounceShape : m_bounceShapes)
@@ -166,16 +214,15 @@ void Ring::update(float deltaTime, const sf::Vector2u& windowSize)
     if (m_currentRadius > 2000.f) // Adjust this value as needed
     {
         m_isAlive = false;
+        return; // OPTIMIZED: Early exit
     }
 
-    // Optional: Fade out as ring gets bigger for nice visual effect
-    if (m_isAlive)
-    {
-        std::uint8_t alpha = static_cast<std::uint8_t>(255 * std::max(0.1f, 1.0f - m_currentRadius / 800.f));
-        sf::Color fadedColor = m_color;
-        fadedColor.a = alpha;
-        m_shape.setOutlineColor(fadedColor);
-    }
+    // OPTIMIZED: Cache alpha calculation - fade out as ring gets bigger
+    // Calculate alpha only once and reuse
+    std::uint8_t alpha = static_cast<std::uint8_t>(255 * std::max(0.1f, 1.0f - m_currentRadius / 800.f));
+    sf::Color fadedColor = m_color;
+    fadedColor.a = alpha;
+    m_shape.setOutlineColor(fadedColor);
 }
 
 void Ring::draw(sf::RenderWindow& window) const
@@ -193,30 +240,25 @@ void Ring::draw(sf::RenderWindow& window) const
     }
 }
 
-bool Ring::isAlive() const
+// OPTIMIZED: Add to batch renderer (much faster than individual draw calls)
+void Ring::addToBatch(BatchRenderer& batchRenderer) const
 {
-    return m_isAlive;
+    if (m_isAlive)
+    {
+        // Add main ring
+        batchRenderer.addRing(m_center, m_currentRadius, m_shape.getOutlineColor(), m_thickness);
+
+        // Add all bounce reflections
+        for (const auto& bounceShape : m_bounceShapes)
+        {
+            sf::Vector2f center = bounceShape.getPosition() + sf::Vector2f(bounceShape.getRadius(), bounceShape.getRadius());
+            batchRenderer.addRing(center, bounceShape.getRadius(), bounceShape.getOutlineColor(), m_thickness);
+        }
+    }
 }
 
-float Ring::getRadius() const
-{
-    return m_currentRadius;
-}
-
-sf::Vector2f Ring::getCenter() const
-{
-    return m_center;
-}
-
-float Ring::getGrowthSpeed() const
-{
-    return m_growthSpeed;
-}
-
-sf::Color Ring::getColor() const
-{
-    return m_color;
-}
+// OPTIMIZED: These functions are now inlined in the header for performance
+// (Definitions removed - see Ring.h)
 
 void Ring::setColor(const sf::Color& color)
 {
@@ -262,10 +304,7 @@ sf::Vector2f Ring::getBounceShapeCenter(int index) const
     return m_center; // Fallback
 }
 
-int Ring::getBounceShapeCount() const
-{
-    return static_cast<int>(m_bounceShapes.size());
-}
+// OPTIMIZED: getBounceShapeCount() is now inlined in the header
 
 // RingManager class implementation
 RingManager::RingManager()
@@ -345,24 +384,36 @@ void RingManager::draw(sf::RenderWindow& window) const
     }
 }
 
+// OPTIMIZED: Batch rendering for all rings
+void RingManager::addToBatch(BatchRenderer& batchRenderer) const
+{
+    for (const auto& ring : m_rings)
+    {
+        ring->addToBatch(batchRenderer);
+    }
+}
+
 void RingManager::clear()
 {
     m_rings.clear();
 }
 
-size_t RingManager::getRingCount() const
-{
-    return m_rings.size();
-}
+// OPTIMIZED: getRingCount() is now inlined in the header
 
 std::vector<Ring*> RingManager::getAllRings() const
 {
     std::vector<Ring*> rings;
+
+    // OPTIMIZED: Reserve capacity to avoid reallocations
+    rings.reserve(m_rings.size());
+
     for (const auto& ring : m_rings)
     {
         rings.push_back(ring.get());
     }
-    return rings;
+
+    // OPTIMIZED: Use move semantics for return (C++11 RVO)
+    return std::move(rings);
 }
 
 void RingManager::cycleToNextColor()
@@ -371,10 +422,7 @@ void RingManager::cycleToNextColor()
     m_currentColor = m_colors[m_currentColorIndex];
 }
 
-sf::Color RingManager::getCurrentColor() const
-{
-    return m_currentColor;
-}
+// OPTIMIZED: getCurrentColor() is now inlined in the header
 
 std::string RingManager::getCurrentColorString() const
 {

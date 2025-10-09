@@ -4,6 +4,7 @@
 #include <memory>
 #include <unordered_set>
 #include <string>
+#include "SpatialGrid.h" // Need full definition for unique_ptr
 
 class Ring; // Forward declaration
 
@@ -60,6 +61,9 @@ public:
     void update(float deltaTime, const std::vector<RingShape>& allCurrentShapes);
     void draw(sf::RenderWindow& window) const;
 
+    // OPTIMIZED: Add to batch renderer
+    void addToBatch(class BatchRenderer& batchRenderer) const;
+
     bool isAlive() const { return m_isAlive && m_hasValidShapes; }
     float getLifetime() const { return m_lifetime; }
     sf::Vector2f getPosition() const { return m_currentPosition; }
@@ -88,18 +92,25 @@ private:
 class AtomManager
 {
 private:
-    static const size_t MAX_ATOMS = 50;
+    // OPTIMIZED: Reduced from 50 to 35 for better performance
+    static const size_t MAX_ATOMS = 35;
 
     std::vector<std::unique_ptr<PathFollowingAtom>> m_atoms;
     size_t m_nextSlot; // FIFO insertion point
     size_t m_atomCount;
 
     // Intersection tracking to prevent duplicate atoms for same shape pairs
-    std::unordered_set<std::string> m_trackedIntersections;
+    std::unordered_set<uint64_t> m_trackedIntersections; // Changed to uint64_t for performance
+
+    // Spatial grid for optimized intersection detection
+    std::unique_ptr<SpatialGrid> m_spatialGrid;
 
     // Helper methods
-    std::string createIntersectionKey(const RingShape& shape1, const RingShape& shape2) const;
+    uint64_t createIntersectionKey(const RingShape& shape1, const RingShape& shape2) const;
     void cleanupIntersectionTracking(const std::vector<RingShape>& allShapes);
+
+    // Fast distance check using squared distance (avoids sqrt)
+    inline bool circlesIntersectFast(const RingShape& shape1, const RingShape& shape2, float& distanceSquared) const;
 
 public:
     AtomManager();
@@ -110,10 +121,15 @@ public:
     // Draw all atoms
     void draw(sf::RenderWindow& window) const;
 
+    // OPTIMIZED: Add all atoms to batch renderer
+    void addToBatch(class BatchRenderer& batchRenderer) const;
+
     // Management methods
     void clear();
-    size_t getAtomCount() const { return m_atomCount; }
-    size_t getMaxAtoms() const { return MAX_ATOMS; }
+
+    // OPTIMIZED: Inline simple getters
+    inline size_t getAtomCount() const { return m_atomCount; }
+    inline size_t getMaxAtoms() const { return MAX_ATOMS; }
 
 private:
     // Intersection detection methods

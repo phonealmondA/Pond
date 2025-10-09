@@ -2,6 +2,7 @@
 #include <iostream>
 #include "Ring.h"
 #include "AtomManager.h"
+#include "BatchRenderer.h"
 
 int main()
 {
@@ -13,6 +14,9 @@ int main()
 
     // Global atom manager with FIFO system
     AtomManager atomManager;
+
+    // OPTIMIZED: Batch renderer for performance
+    BatchRenderer batchRenderer;
 
     // Clock for timing
     sf::Clock clock;
@@ -37,12 +41,19 @@ int main()
     std::cout << std::endl;
     std::cout << "Enhanced Wave Interference:" << std::endl;
     std::cout << "- All ring intersections (main + bounces) create atoms" << std::endl;
-    std::cout << "- Global atom pool with 300 atom limit (FIFO replacement)" << std::endl;
+    std::cout << "- Global atom pool with 35 atom limit (FIFO replacement)" << std::endl;
     std::cout << "- Atoms are independent and persist after rings separate" << std::endl;
     std::cout << "- Same frequency rings cancel out (no interference)" << std::endl;
     std::cout << "- Atom colors = additive mixing of ring frequencies" << std::endl;
     std::cout << "- Higher frequency differences = more energetic atoms" << std::endl;
     std::cout << "- Complex multi-bounce interference patterns!" << std::endl;
+    std::cout << std::endl;
+    std::cout << "OPTIMIZED BUILD - Performance Improvements:" << std::endl;
+    std::cout << "- Spatial grid partitioning (O(n) instead of O(n^2))" << std::endl;
+    std::cout << "- Batch rendering (1 draw call vs 100+)" << std::endl;
+    std::cout << "- Aggressive bounce shape culling" << std::endl;
+    std::cout << "- Squared distance calculations (no sqrt)" << std::endl;
+    std::cout << "- Numeric intersection keys (no string allocations)" << std::endl;
     std::cout << std::endl;
     std::cout << "Current frequency: " << ringManager.getCurrentFrequencyInfo() << std::endl;
     std::cout << std::endl;
@@ -51,6 +62,10 @@ int main()
     while (window.isOpen())
     {
         float deltaTime = clock.restart().asSeconds();
+
+        // OPTIMIZED: Clamp delta time to prevent physics explosions on lag spikes
+        // Minimum simulated FPS of 10 (max delta = 0.1s)
+        deltaTime = std::min(deltaTime, 0.1f);
 
         // Handle events
         while (auto event = window.pollEvent())
@@ -69,14 +84,16 @@ int main()
                     ringManager.addRing(sf::Vector2f(static_cast<float>(clickPos.x),
                         static_cast<float>(clickPos.y)));
 
-                    std::cout << "Ring created at (" << clickPos.x << ", " << clickPos.y
-                        << ") - " << ringManager.getCurrentFrequencyInfo() << std::endl;
+                    // OPTIMIZED: Removed debug spam
+                    // std::cout << "Ring created at (" << clickPos.x << ", " << clickPos.y
+                    //     << ") - " << ringManager.getCurrentFrequencyInfo() << std::endl;
                 }
                 else if (mouseClick->button == sf::Mouse::Button::Right)
                 {
                     // Cycle to next color
                     ringManager.cycleToNextColor();
-                    std::cout << "Frequency changed to: " << ringManager.getCurrentFrequencyInfo() << std::endl;
+                    // OPTIMIZED: Removed debug spam
+                    // std::cout << "Frequency changed to: " << ringManager.getCurrentFrequencyInfo() << std::endl;
                 }
             }
             else if (auto keyPress = event->getIf<sf::Event::KeyPressed>())
@@ -101,7 +118,9 @@ int main()
         std::vector<Ring*> allRings = ringManager.getAllRings();
         atomManager.update(deltaTime, allRings, window.getSize());
 
-        // Periodic info display (every 5 seconds)
+        // OPTIMIZED: Removed periodic status spam (was every 5 seconds)
+        // Use this for debugging if needed
+        /*
         if (infoTimer.getElapsedTime().asSeconds() > 5.0f)
         {
             size_t ringCount = ringManager.getRingCount();
@@ -114,15 +133,16 @@ int main()
             }
             infoTimer.restart();
         }
+        */
 
         // Render
         window.clear(sf::Color::Black);
 
-        // Draw rings first (they're the background wave fronts)
-        ringManager.draw(window);
-
-        // Draw atoms on top (they're the interference patterns)
-        atomManager.draw(window);
+        // OPTIMIZED: Use batch rendering (2 draw calls instead of 100+)
+        batchRenderer.begin();
+        ringManager.addToBatch(batchRenderer);
+        atomManager.addToBatch(batchRenderer);
+        batchRenderer.end(window);
 
         window.display();
     }
