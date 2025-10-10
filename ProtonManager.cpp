@@ -12,7 +12,7 @@ ProtonManager::ProtonManager()
     m_protons.resize(Constants::System::MAX_PROTONS);
 }
 
-void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager, const std::vector<Ring*>& rings)
+void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, const AtomManager& atomManager, RingManager& ringManager)
 {
     // Update cooldowns
     updateCooldowns(deltaTime);
@@ -85,6 +85,9 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
     // Handle proton-proton interactions
     handleProtonProtonRepulsion(deltaTime);
     handleProtonProtonAbsorption();
+
+    // Handle nuclear fusion
+    handleNuclearFusion(ringManager);
 
     // Detect high-energy atom collisions and spawn new protons
     detectAndSpawnFromAtomCollisions(atomManager);
@@ -440,4 +443,127 @@ void ProtonManager::updateCooldowns(float deltaTime)
             [](const auto& cooldown) { return cooldown.second <= 0.0f; }),
         m_spawnCooldowns.end()
     );
+}
+
+void ProtonManager::handleNuclearFusion(RingManager& ringManager)
+{
+    // Check all proton pairs for fusion conditions
+    for (size_t i = 0; i < m_protons.size(); ++i)
+    {
+        if (!m_protons[i] || !m_protons[i]->isAlive()) continue;
+        if (m_protons[i]->isStableHydrogen()) continue;
+
+        for (size_t j = i + 1; j < m_protons.size(); ++j)
+        {
+            if (!m_protons[j] || !m_protons[j]->isAlive()) continue;
+            if (m_protons[j]->isStableHydrogen()) continue;
+
+            // Get proton data
+            sf::Vector2f pos1 = m_protons[i]->getPosition();
+            sf::Vector2f pos2 = m_protons[j]->getPosition();
+            sf::Vector2f vel1 = m_protons[i]->getVelocity();
+            sf::Vector2f vel2 = m_protons[j]->getVelocity();
+
+            int charge1 = m_protons[i]->getCharge();
+            int charge2 = m_protons[j]->getCharge();
+            int neutron1 = m_protons[i]->getNeutronCount();
+            int neutron2 = m_protons[j]->getNeutronCount();
+
+            // Calculate distance
+            float dx = pos2.x - pos1.x;
+            float dy = pos2.y - pos1.y;
+            float distSquared = dx * dx + dy * dy;
+
+            float radius1 = m_protons[i]->getRadius();
+            float radius2 = m_protons[j]->getRadius();
+            float collisionDist = radius1 + radius2;
+
+            // Not colliding - skip
+            if (distSquared > collisionDist * collisionDist) continue;
+
+            // Calculate relative velocity
+            sf::Vector2f relVel = vel1 - vel2;
+            float relSpeed = std::sqrt(relVel.x * relVel.x + relVel.y * relVel.y);
+
+            // FUSION CASE 1: Deuterium (0, neutron=1) + Proton (+1, neutron=0) → Helium-3 (+1, neutron=2)
+            if ((charge1 == 0 && neutron1 == 1 && charge2 == +1 && neutron2 == 0) ||
+                (charge2 == 0 && neutron2 == 1 && charge1 == +1 && neutron1 == 0))
+            {
+                if (relSpeed > Constants::Proton::DEUTERIUM_FUSION_VELOCITY_THRESHOLD)
+                {
+                    // Calculate center of mass
+                    float mass1 = m_protons[i]->getMass();
+                    float mass2 = m_protons[j]->getMass();
+                    float totalMass = mass1 + mass2;
+                    sf::Vector2f centerOfMass = (pos1 * mass1 + pos2 * mass2) / totalMass;
+                    sf::Vector2f combinedVel = (vel1 * mass1 + vel2 * mass2) / totalMass;
+
+                    // Create Helium-3 in first slot
+                    float combinedEnergy = m_protons[i]->getEnergy() + m_protons[j]->getEnergy();
+                    m_protons[i] = std::make_unique<Proton>(
+                        centerOfMass,
+                        combinedVel,
+                        sf::Color(255, 200, 100),
+                        combinedEnergy,
+                        +1  // charge
+                    );
+                    m_protons[i]->setNeutronCount(2);  // Set neutron count to 2
+
+                    // Spawn energy wave at fusion point
+                    ringManager.addRing(centerOfMass);
+
+                    // Delete second proton
+                    m_protons[j].reset();
+
+                    std::cout << "Helium-3 formed! D + H → He3 + gamma" << std::endl;
+                    break;
+                }
+            }
+
+            // FUSION CASE 2: Helium-3 (+1, neutron=2) + Helium-3 (+1, neutron=2) → Helium-4 (+2, neutron=2) + 2 protons
+            else if (charge1 == +1 && neutron1 == 2 && charge2 == +1 && neutron2 == 2)
+            {
+                if (relSpeed > Constants::Proton::HELIUM3_FUSION_VELOCITY_THRESHOLD)
+                {
+                    // Calculate center of mass
+                    float mass1 = m_protons[i]->getMass();
+                    float mass2 = m_protons[j]->getMass();
+                    float totalMass = mass1 + mass2;
+                    sf::Vector2f centerOfMass = (pos1 * mass1 + pos2 * mass2) / totalMass;
+                    sf::Vector2f combinedVel = (vel1 * mass1 + vel2 * mass2) / totalMass;
+
+                    // Create Helium-4 in first slot
+                    float combinedEnergy = m_protons[i]->getEnergy() + m_protons[j]->getEnergy();
+                    m_protons[i] = std::make_unique<Proton>(
+                        centerOfMass,
+                        combinedVel,
+                        sf::Color(255, 255, 100),
+                        combinedEnergy * 0.5f,  // Half energy stays in He4
+                        +2  // charge
+                    );
+                    m_protons[i]->setNeutronCount(2);  // Set neutron count to 2
+                    m_protons[i]->setMaxLifetime(-1.0f);  // Helium-4 is stable - never dies
+
+                    // Spawn BIG energy wave at fusion point
+                    ringManager.addRing(centerOfMass);
+                    ringManager.addRing(centerOfMass);  // Double wave for more energy
+
+                    // Spawn 2 high-energy protons (the released protons)
+                    float releaseSpeed = 200.0f;
+                    sf::Vector2f perpVel(-relVel.y, relVel.x);  // Perpendicular direction
+                    float perpLen = std::sqrt(perpVel.x * perpVel.x + perpVel.y * perpVel.y);
+                    if (perpLen > 0.001f) perpVel /= perpLen;
+
+                    spawnProton(centerOfMass + perpVel * 10.0f, perpVel * releaseSpeed, sf::Color::White, combinedEnergy * 0.25f, +1);
+                    spawnProton(centerOfMass - perpVel * 10.0f, -perpVel * releaseSpeed, sf::Color::White, combinedEnergy * 0.25f, +1);
+
+                    // Delete second He3
+                    m_protons[j].reset();
+
+                    std::cout << "Helium-4 formed! He3 + He3 → He4 + 2H" << std::endl;
+                    break;
+                }
+            }
+        }
+    }
 }

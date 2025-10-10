@@ -98,6 +98,23 @@ void Proton::addToBatch(BatchRenderer& batchRenderer) const
         renderColor.b = static_cast<std::uint8_t>(std::min(255, static_cast<int>(renderColor.b * 1.3f)));
     }
 
+    // Helium-3 visual (charge +1, neutronCount 2)
+    if (m_charge == +1 && m_neutronCount == 2)
+    {
+        renderColor.r = Constants::Proton::HELIUM3_COLOR_R;
+        renderColor.g = Constants::Proton::HELIUM3_COLOR_G;
+        renderColor.b = Constants::Proton::HELIUM3_COLOR_B;
+        renderRadius *= Constants::Proton::HELIUM3_RADIUS_MULTIPLIER;
+    }
+    // Helium-4 visual (charge +2, neutronCount 2)
+    else if (m_charge == +2 && m_neutronCount == 2)
+    {
+        renderColor.r = Constants::Proton::HELIUM4_COLOR_R;
+        renderColor.g = Constants::Proton::HELIUM4_COLOR_G;
+        renderColor.b = Constants::Proton::HELIUM4_COLOR_B;
+        renderRadius *= Constants::Proton::HELIUM4_RADIUS_MULTIPLIER;
+    }
+
     // Pulsing effect based on energy
     float pulseFrequency = Constants::Proton::PULSE_FREQUENCY_BASE + (m_energy * Constants::Proton::PULSE_FREQUENCY_ENERGY_FACTOR);
     float pulse = std::sin(m_pulseTimer * pulseFrequency) * Constants::Proton::PULSE_INTENSITY + Constants::Proton::PULSE_BASE;

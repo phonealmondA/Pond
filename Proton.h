@@ -57,6 +57,8 @@ public:
     void setVelocity(sf::Vector2f velocity) { m_velocity = velocity; }
     void addVelocity(sf::Vector2f deltaVelocity) { m_velocity += deltaVelocity; }
     void markForDeletion() { m_markedForDeletion = true; }
+    void setNeutronCount(int count) { m_neutronCount = count; }
+    void setMaxLifetime(float lifetime) { m_maxLifetime = lifetime; }
 
     // Proton interactions
     void absorbProton(const Proton& other);

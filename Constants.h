@@ -73,6 +73,22 @@ namespace Constants
 
         // Negative Proton Decay
         constexpr float NEGATIVE_DECAY_TIME = 5.0f;
+
+        // Fusion thresholds
+        constexpr float DEUTERIUM_FUSION_VELOCITY_THRESHOLD = 250.0f;  // Speed needed for D + H fusion
+        constexpr float HELIUM3_FUSION_VELOCITY_THRESHOLD = 350.0f;    // Speed needed for He3 + He3 fusion
+        constexpr float FUSION_ENERGY_RELEASE = 80.0f;                 // Energy released as wave
+
+        // Helium colors
+        constexpr int HELIUM3_COLOR_R = 255;
+        constexpr int HELIUM3_COLOR_G = 200;
+        constexpr int HELIUM3_COLOR_B = 100;
+        constexpr int HELIUM4_COLOR_R = 255;
+        constexpr int HELIUM4_COLOR_G = 255;
+        constexpr int HELIUM4_COLOR_B = 100;
+
+        constexpr float HELIUM3_RADIUS_MULTIPLIER = 1.5f;
+        constexpr float HELIUM4_RADIUS_MULTIPLIER = 1.8f;
     }
 
     // ===== PROTON MANAGER PHYSICS =====
