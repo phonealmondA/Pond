@@ -17,24 +17,19 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
     // Update cooldowns
     updateCooldowns(deltaTime);
 
-    // Update physics for all protons
+    // ===== STEP 1: Simple straight-line physics (NO FORCES!) =====
     updateProtonPhysics(deltaTime, windowSize);
 
-    // Apply charge-based atom forces (attraction/repulsion)
-    handleProtonAtomForces(deltaTime, atomManager);
-
-    // Check protons for atom proximity interactions (neutron formation)
+    // ===== STEP 2: Neutron formation (proximity to atoms) =====
     for (auto& proton : m_protons)
     {
         if (proton && proton->isAlive() && proton->getCharge() == +1)
         {
             bool nearAtom = false;
             sf::Vector2f protonPos = proton->getPosition();
-
-            // Get all atoms from atom manager
             const auto& atoms = atomManager.getAtoms();
 
-            // Check if proton is near any atom
+            // Simple distance check - no complex forces
             for (const auto& atom : atoms)
             {
                 if (atom && atom->isAlive())
@@ -44,8 +39,7 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
                     float dy = protonPos.y - atomPos.y;
                     float distSquared = dx * dx + dy * dy;
 
-                    // Proton is near atom if distance < NEUTRON_FORMATION_DISTANCE
-                    if (distSquared < Constants::ProtonManager::NEUTRON_FORMATION_DISTANCE * Constants::ProtonManager::NEUTRON_FORMATION_DISTANCE)
+                    if (distSquared < 50.0f * 50.0f)  // 50px proximity threshold
                     {
                         nearAtom = true;
                         break;
@@ -53,48 +47,38 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
                 }
             }
 
-            // Try neutron formation based on atom proximity
             proton->tryNeutronFormation(deltaTime, nearAtom);
         }
     }
 
-    // Check for electron capture (for neutral protons with neutron)
+    // ===== STEP 3: Electron capture (for neutral protons) =====
     for (auto& proton : m_protons)
     {
         if (proton && proton->isAlive() && proton->getCharge() == 0 && proton->getNeutronCount() == 1)
         {
-            // Get all atoms from atom manager
             const auto& atoms = atomManager.getAtoms();
 
             for (const auto& atom : atoms)
             {
                 if (atom && atom->isAlive())
                 {
-                    // Try to capture this electron
                     if (proton->tryCaptureElectron(*atom))
                     {
-                        // Electron was captured, mark atom for deletion
                         atom->markForDeletion();
-                        break; // One electron per proton
+                        break;
                     }
                 }
             }
         }
     }
 
-    // Handle proton-proton interactions
-    handleProtonProtonRepulsion(deltaTime);
-
-    // Handle nuclear fusion (MUST happen before absorption to allow He formation)
+    // ===== STEP 4: Nuclear fusion (only when touching) =====
     handleNuclearFusion(ringManager);
 
-    // Handle absorption (only for non-fusable collisions)
-    handleProtonProtonAbsorption();
-
-    // Detect high-energy atom collisions and spawn new protons
+    // ===== STEP 5: Spawn from atom collisions =====
     detectAndSpawnFromAtomCollisions(atomManager);
 
-    // Remove dead protons and protons marked for deletion (but preserve stable hydrogen and He4)
+    // ===== STEP 6: Cleanup dead protons =====
     for (auto& proton : m_protons)
     {
         if (proton && (!proton->isAlive() || proton->isMarkedForDeletion()))
@@ -149,6 +133,7 @@ size_t ProtonManager::getProtonCount() const
 
 void ProtonManager::updateProtonPhysics(float deltaTime, const sf::Vector2u& windowSize)
 {
+    // SIMPLIFIED: Just update position based on velocity (no forces!)
     for (auto& proton : m_protons)
     {
         if (proton && proton->isAlive())
@@ -158,151 +143,9 @@ void ProtonManager::updateProtonPhysics(float deltaTime, const sf::Vector2u& win
     }
 }
 
-void ProtonManager::handleProtonProtonRepulsion(float deltaTime)
-{
-    // Check all proton pairs for repulsion
-    for (size_t i = 0; i < m_protons.size(); ++i)
-    {
-        if (!m_protons[i] || !m_protons[i]->isAlive()) continue;
-
-        for (size_t j = i + 1; j < m_protons.size(); ++j)
-        {
-            if (!m_protons[j] || !m_protons[j]->isAlive()) continue;
-
-            // Calculate distance between protons
-            sf::Vector2f pos1 = m_protons[i]->getPosition();
-            sf::Vector2f pos2 = m_protons[j]->getPosition();
-            sf::Vector2f delta = pos2 - pos1;
-            float distSquared = delta.x * delta.x + delta.y * delta.y;
-            float distance = std::sqrt(distSquared);
-
-            // Skip if too far apart
-            if (distance > Constants::ProtonManager::REPULSION_RANGE) continue;
-
-            // Calculate repulsion force (inverse square law)
-            float force = Constants::ProtonManager::REPULSION_STRENGTH / (distSquared + Constants::ProtonManager::REPULSION_SAFETY_FACTOR);
-
-            // Normalize direction vector
-            if (distance > Constants::Math::EPSILON)
-            {
-                delta /= distance;
-
-                // Apply force as velocity change (F = ma, assume mass in proton)
-                float mass1 = m_protons[i]->getMass();
-                float mass2 = m_protons[j]->getMass();
-
-                sf::Vector2f acceleration1 = -delta * (force / mass1) * deltaTime;
-                sf::Vector2f acceleration2 = delta * (force / mass2) * deltaTime;
-
-                m_protons[i]->addVelocity(acceleration1);
-                m_protons[j]->addVelocity(acceleration2);
-            }
-        }
-    }
-}
-
-void ProtonManager::handleProtonProtonAbsorption()
-{
-    // Check all proton pairs for collision/absorption
-    for (size_t i = 0; i < m_protons.size(); ++i)
-    {
-        if (!m_protons[i] || !m_protons[i]->isAlive()) continue;
-
-        // Skip stable particles - they never get absorbed
-        if (m_protons[i]->isStableHydrogen() || m_protons[i]->isStableHelium4()) continue;
-
-        for (size_t j = i + 1; j < m_protons.size(); ++j)
-        {
-            if (!m_protons[j] || !m_protons[j]->isAlive()) continue;
-
-            // Skip stable particles - they never get absorbed
-            if (m_protons[j]->isStableHydrogen() || m_protons[j]->isStableHelium4()) continue;
-
-            // Calculate distance between protons
-            sf::Vector2f pos1 = m_protons[i]->getPosition();
-            sf::Vector2f pos2 = m_protons[j]->getPosition();
-            float dx = pos2.x - pos1.x;
-            float dy = pos2.y - pos1.y;
-            float distSquared = dx * dx + dy * dy;
-
-            float radius1 = m_protons[i]->getRadius();
-            float radius2 = m_protons[j]->getRadius();
-            float collisionDist = radius1 + radius2;
-
-            // Check for collision
-            if (distSquared < collisionDist * collisionDist)
-            {
-                // Larger proton absorbs smaller one
-                if (m_protons[i]->getEnergy() >= m_protons[j]->getEnergy())
-                {
-                    m_protons[i]->absorbProton(*m_protons[j]);
-                    m_protons[j]->markForDeletion(); // Mark for deletion instead of immediate reset
-                }
-                else
-                {
-                    m_protons[j]->absorbProton(*m_protons[i]);
-                    m_protons[i]->markForDeletion(); // Mark for deletion instead of immediate reset
-                    break; // Exit inner loop since proton i is marked, can't continue with it
-                }
-            }
-        }
-    }
-}
-
-void ProtonManager::handleProtonAtomForces(float deltaTime, const AtomManager& atomManager)
-{
-    // Get all atoms from atom manager
-    const auto& atoms = atomManager.getAtoms();
-
-    // Loop through all protons
-    for (auto& proton : m_protons)
-    {
-        if (!proton || !proton->isAlive()) continue;
-
-        // Skip neutral protons (charge 0)
-        int charge = proton->getCharge();
-        if (charge == 0) continue;
-
-        sf::Vector2f protonPos = proton->getPosition();
-
-        // Loop through all atoms
-        for (const auto& atom : atoms)
-        {
-            if (!atom || !atom->isAlive()) continue;
-
-            sf::Vector2f atomPos = atom->getPosition();
-            sf::Vector2f delta = atomPos - protonPos;
-            float distSquared = delta.x * delta.x + delta.y * delta.y;
-
-            // Check if atom is within interaction range
-            if (distSquared < Constants::ProtonManager::ATOM_ATTRACTION_RANGE * Constants::ProtonManager::ATOM_ATTRACTION_RANGE && distSquared > Constants::Math::EPSILON)
-            {
-                float distance = std::sqrt(distSquared);
-
-                // Normalize direction vector
-                sf::Vector2f direction = delta / distance;
-
-                // Calculate force using inverse square law
-                float force;
-                if (charge == +1)
-                {
-                    // Positive charge: attraction toward atom
-                    force = Constants::ProtonManager::ATOM_ATTRACTION_STRENGTH / (distSquared + Constants::ProtonManager::REPULSION_SAFETY_FACTOR);
-                }
-                else // charge == -1
-                {
-                    // Negative charge: repulsion away from atom
-                    force = -Constants::ProtonManager::ATOM_REPULSION_STRENGTH / (distSquared + Constants::ProtonManager::REPULSION_SAFETY_FACTOR);
-                }
-
-                // Apply force as velocity change using proton mass
-                float mass = proton->getMass();
-                sf::Vector2f acceleration = direction * (force / mass) * deltaTime;
-                proton->addVelocity(acceleration);
-            }
-        }
-    }
-}
+// ===== DELETED: handleProtonProtonRepulsion() - 2,775 calculations eliminated! =====
+// ===== DELETED: handleProtonProtonAbsorption() - Complex absorption removed! =====
+// ===== DELETED: handleProtonAtomForces() - 2,625 force calculations eliminated! =====
 
 void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomManager)
 {

@@ -40,6 +40,9 @@ int main()
     sf::Clock clock;
     sf::Clock infoTimer; // For periodic info display
 
+    // ===== PERFORMANCE: Staggered update rates =====
+    int frameCounter = 0;
+
     // Create an initial center ring to demonstrate bouncing
     ringManager.addRing(sf::Vector2f(400.f, 300.f)); // Center ring
 
@@ -136,15 +139,22 @@ int main()
             }
         }
 
-        // Update all rings
+        // Increment frame counter
+        frameCounter++;
+
+        // ===== RINGS: 60 FPS (every frame) - smooth visuals =====
         ringManager.update(deltaTime, window.getSize());
 
-        // Update atoms and detect intersections
+        // ===== ATOMS: 20 FPS (every 3rd frame) - less critical =====
         std::vector<Ring*> allRings = ringManager.getAllRings();
-        atomManager.update(deltaTime, allRings, window.getSize());
+        if (frameCounter % 3 == 0) {
+            atomManager.update(deltaTime * 3.0f, allRings, window.getSize());
+        }
 
-        // Update protons (physics, interactions, spawning from atom collisions)
-        protonManager.update(deltaTime, window.getSize(), atomManager, ringManager);
+        // ===== PROTONS: 15 FPS (every 4th frame) - biggest optimization! =====
+        if (frameCounter % 4 == 0) {
+            protonManager.update(deltaTime * 4.0f, window.getSize(), atomManager, ringManager);
+        }
 
         // OPTIMIZED: Removed periodic status spam (was every 5 seconds)
         // Use this for debugging if needed

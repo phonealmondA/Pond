@@ -9,8 +9,8 @@ namespace Constants
     // ===== SYSTEM LIMITS =====
     namespace System
     {
-        constexpr size_t MAX_PROTONS = 75;
-        constexpr size_t MAX_ATOMS = 35;
+        constexpr size_t MAX_PROTONS = 15;  // Reduced from 75 for performance
+        constexpr size_t MAX_ATOMS = 20;    // Reduced from 35 for performance
         constexpr int CIRCLE_SEGMENTS = 24;  // Number of segments for circle approximation
         constexpr int COLOR_PALETTE_SIZE = 35;  // Number of predefined ring colors
         constexpr int COLOR_CYCLE_SIZE = 6;  // Number of colors in right-click cycle

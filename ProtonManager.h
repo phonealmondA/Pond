@@ -39,11 +39,8 @@ public:
     size_t getProtonCount() const;
 
 private:
-    // Physics updates
+    // Physics updates (SIMPLIFIED - no more force calculations!)
     void updateProtonPhysics(float deltaTime, const sf::Vector2u& windowSize);
-    void handleProtonProtonRepulsion(float deltaTime);
-    void handleProtonProtonAbsorption();
-    void handleProtonAtomForces(float deltaTime, const AtomManager& atomManager);
     void handleNuclearFusion(RingManager& ringManager);
 
     // Spawning from high-energy atom collisions

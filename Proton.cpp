@@ -41,14 +41,23 @@ void Proton::update(float deltaTime, const sf::Vector2u& windowSize)
         return;
     }
 
-    // Friction removed to simulate vacuum
-    // m_velocity *= FRICTION;
-
-    // Update position based on velocity
+    // SIMPLIFIED: Straight-line movement only (no forces, no friction)
     m_position += m_velocity * deltaTime;
 
     // Handle boundary collisions
     handleBoundaryCollision(windowSize);
+
+    // ===== OFF-SCREEN CULLING: Kill protons far off-screen =====
+    const float CULL_MARGIN = 200.0f;
+    if (m_position.x < -CULL_MARGIN || m_position.x > windowSize.x + CULL_MARGIN ||
+        m_position.y < -CULL_MARGIN || m_position.y > windowSize.y + CULL_MARGIN)
+    {
+        // Don't cull stable particles - they're important!
+        if (!m_isStableHydrogen && m_charge != +2)  // Not stable H1 or He4
+        {
+            m_isAlive = false;
+        }
+    }
 }
 
 void Proton::addToBatch(BatchRenderer& batchRenderer) const
@@ -129,29 +138,7 @@ void Proton::addToBatch(BatchRenderer& batchRenderer) const
     batchRenderer.addAtom(m_position, renderRadius * Constants::Proton::GLOW_LAYER2_RADIUS, glowColor2);
 }
 
-void Proton::absorbProton(const Proton& other)
-{
-    // Combine energy
-    float totalEnergy = m_energy + other.m_energy;
-
-    // Combine momentum (mass * velocity)
-    float totalMass = m_mass + other.m_mass;
-    sf::Vector2f totalMomentum = m_velocity * m_mass + other.m_velocity * other.m_mass;
-
-    // Update properties
-    m_energy = totalEnergy;
-    m_radius = calculateRadius(m_energy);
-    m_mass = calculateMass(m_energy);
-    m_velocity = totalMomentum / totalMass;
-
-    // Mix colors (weighted by energy)
-    float weight1 = m_energy / totalEnergy;
-    float weight2 = other.m_energy / totalEnergy;
-
-    m_color.r = static_cast<std::uint8_t>(m_color.r * weight1 + other.m_color.r * weight2);
-    m_color.g = static_cast<std::uint8_t>(m_color.g * weight1 + other.m_color.g * weight2);
-    m_color.b = static_cast<std::uint8_t>(m_color.b * weight1 + other.m_color.b * weight2);
-}
+// ===== DELETED: absorbProton() - absorption system removed for performance =====
 
 float Proton::calculateRadius(float energy) const
 {
