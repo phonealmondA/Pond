@@ -65,11 +65,14 @@ namespace Constants
         constexpr int NEUTRAL_PROTON_B = 200;
 
         // Neutron Formation
-        constexpr float NEUTRON_FORMATION_TIME = 3.0f;  // Seconds near atom
+        constexpr float NEUTRON_FORMATION_TIME = 0.50f;  // Seconds near atom
         constexpr float NEUTRON_RADIUS_MULTIPLIER = 1.2f;
 
         // Electron Capture
         constexpr float ELECTRON_CAPTURE_DISTANCE = 15.0f;
+
+        // Negative Proton Decay
+        constexpr float NEGATIVE_DECAY_TIME = 5.0f;
     }
 
     // ===== PROTON MANAGER PHYSICS =====
@@ -94,6 +97,7 @@ namespace Constants
         constexpr float SPAWN_COOLDOWN_TIME = 0.5f;  // Seconds
         constexpr float MAX_SPAWN_SPEED = 200.0f;
         constexpr float VELOCITY_ENERGY_FACTOR = 0.5f;
+        constexpr float NEGATIVE_PROTON_ENERGY_THRESHOLD = 400.0f;
     }
 
     // ===== ATOM PHYSICS =====

@@ -4,6 +4,7 @@
 #include "Ring.h"
 #include <cmath>
 #include <random>
+#include <iostream>
 
 ProtonManager::ProtonManager()
     : m_nextSlot(0)
@@ -380,8 +381,11 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
                     // Proton color (white for now - could mix atom colors if available)
                     sf::Color protonColor = sf::Color::White;
 
+                    // Determine charge based on combined energy
+                    int charge = (combinedEnergy >= Constants::ProtonManager::NEGATIVE_PROTON_ENERGY_THRESHOLD) ? -1 : +1;
+
                     // Spawn the proton
-                    spawnProton(spawnPos, velocity, protonColor, combinedEnergy);
+                    spawnProton(spawnPos, velocity, protonColor, combinedEnergy, charge);
 
                     // 5. Add cooldown to prevent duplicate spawns
                     m_spawnCooldowns.push_back(std::make_pair(spawnPos, Constants::ProtonManager::SPAWN_COOLDOWN_TIME));
@@ -391,42 +395,36 @@ void ProtonManager::detectAndSpawnFromAtomCollisions(const AtomManager& atomMana
     }
 }
 
-void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy)
+
+void ProtonManager::spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy, int charge)
 {
-    // Check if we have space
+    // NEW APPROACH: Reject new protons when at capacity (no replacement)
+    // Only count unstable protons - stable hydrogen doesn't count toward limit
     if (getProtonCount() >= Constants::System::MAX_PROTONS)
     {
-        // FIFO replacement - find oldest unstable slot (skip stable hydrogen)
-        size_t attempts = 0;
-        while (attempts < Constants::System::MAX_PROTONS)
-        {
-            if (!m_protons[m_nextSlot] ||
-                (!m_protons[m_nextSlot]->isAlive()) ||
-                (!m_protons[m_nextSlot]->isStableHydrogen()))
-            {
-                // Found a slot that can be replaced
-                m_protons[m_nextSlot] = std::make_unique<Proton>(position, velocity, color, energy);
-                m_nextSlot = (m_nextSlot + 1) % Constants::System::MAX_PROTONS;
-                break;
-            }
-            m_nextSlot = (m_nextSlot + 1) % Constants::System::MAX_PROTONS;
-            attempts++;
-        }
+        // At capacity - reject this new proton (don't spawn it)
+        return;
     }
-    else
+
+    // We have space - find first empty slot and spawn
+    for (size_t i = 0; i < m_protons.size(); ++i)
     {
-        // Find first empty slot
-        for (size_t i = 0; i < m_protons.size(); ++i)
+        if (!m_protons[i] || !m_protons[i]->isAlive())
         {
-            if (!m_protons[i] || !m_protons[i]->isAlive())
+            m_protons[i] = std::make_unique<Proton>(position, velocity, color, energy, charge);
+
+            // Debug output for negative protons
+            if (charge == -1)
             {
-                m_protons[i] = std::make_unique<Proton>(position, velocity, color, energy);
-                m_nextSlot = (i + 1) % Constants::System::MAX_PROTONS;
-                break;
+                std::cout << "Negative proton spawned! Charge: -1, Energy: " << energy << std::endl;
             }
+
+            break;
         }
     }
 }
+
+
 
 void ProtonManager::updateCooldowns(float deltaTime)
 {

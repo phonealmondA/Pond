@@ -152,6 +152,7 @@
   <ItemGroup>
     <ClInclude Include="AtomManager.h" />
     <ClInclude Include="BatchRenderer.h" />
+    <ClInclude Include="Constants.h" />
     <ClInclude Include="events.h" />
     <ClInclude Include="Proton.h" />
     <ClInclude Include="ProtonManager.h" />

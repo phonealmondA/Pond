@@ -28,8 +28,11 @@ private:
     bool m_isStableHydrogen;
     float m_waveFieldTimer;
 
+    // Negative proton decay system
+    float m_decayTimer;
+
 public:
-    Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy);
+    Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy, int charge = +1);
 
     // Update physics and visuals
     void update(float deltaTime, const sf::Vector2u& windowSize);

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy)
+Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy, int charge)
     : m_position(position)
     , m_velocity(velocity)
     , m_color(color)
@@ -13,10 +13,11 @@ Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, fl
     , m_markedForDeletion(false)
     , m_lifetime(0.0f)
     , m_pulseTimer(0.0f)
-    , m_charge(+1)
+    , m_charge(charge)
     , m_neutronCount(0)
     , m_isStableHydrogen(false)
     , m_waveFieldTimer(0.0f)
+    , m_decayTimer(0.0f)
 {
     m_radius = calculateRadius(energy);
     m_mass = calculateMass(energy);
@@ -39,6 +40,17 @@ void Proton::update(float deltaTime, const sf::Vector2u& windowSize)
     {
         m_isAlive = false;
         return;
+    }
+
+    // Negative proton decay system
+    if (m_charge == -1)
+    {
+        m_decayTimer += deltaTime;
+        if (m_decayTimer >= Constants::Proton::NEGATIVE_DECAY_TIME)
+        {
+            m_charge = +1;
+            m_decayTimer = 0.0f;
+        }
     }
 
     // Friction removed to simulate vacuum
@@ -79,6 +91,11 @@ void Proton::addToBatch(BatchRenderer& batchRenderer) const
     {
         // Bare proton: slight red tint
         renderColor.r = static_cast<std::uint8_t>(std::min(255, static_cast<int>(renderColor.r * Constants::Proton::BARE_PROTON_RED_TINT)));
+    }
+    else if (m_charge == -1)
+    {
+        // Negative proton: blue tint
+        renderColor.b = static_cast<std::uint8_t>(std::min(255, static_cast<int>(renderColor.b * 1.3f)));
     }
 
     // Pulsing effect based on energy

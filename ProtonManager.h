@@ -45,7 +45,7 @@ private:
     void detectAndSpawnFromAtomCollisions(const AtomManager& atomManager);
 
     // Spawn new proton
-    void spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy);
+    void spawnProton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy, int charge = +1);
 
     // Update cooldown timers
     void updateCooldowns(float deltaTime);
