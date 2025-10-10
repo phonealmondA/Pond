@@ -48,10 +48,10 @@ impl Ring {
     /// Calculate growth speed based on light frequency
     /// Blue dominant = fastest, red dominant = slowest
     pub fn calculate_frequency_based_speed(color: Color) -> f32 {
-        let speed_factor = (color.r * COLOR_WEIGHT_RED
+        // macroquad colors are already normalized 0.0-1.0, don't divide by 255
+        let speed_factor = color.r * COLOR_WEIGHT_RED
             + color.g * COLOR_WEIGHT_GREEN
-            + color.b * COLOR_WEIGHT_BLUE)
-            / COLOR_MAX;
+            + color.b * COLOR_WEIGHT_BLUE;
 
         // Map to speed range
         MIN_RING_SPEED + (speed_factor * (MAX_RING_SPEED - MIN_RING_SPEED))
@@ -323,6 +323,18 @@ impl RingManager {
     pub fn add_ring(&mut self, position: Vec2) {
         self.rings
             .push(Ring::new(position, self.current_color, DEFAULT_RING_THICKNESS));
+    }
+
+    /// Add an energy-based colored ring (red=low energy, white=high energy)
+    pub fn add_energy_ring(&mut self, position: Vec2, energy: f32) {
+        // Map energy to color: 0-100 = red to white
+        let normalized = (energy / 100.0).clamp(0.0, 1.0);
+
+        // Red (low) to white (high)
+        let color = Color::new(1.0, normalized, normalized, 1.0);
+
+        self.rings
+            .push(Ring::new(position, color, DEFAULT_RING_THICKNESS));
     }
 
     /// Update all rings

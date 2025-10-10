@@ -15,8 +15,8 @@ use proton_manager::ProtonManager;
 fn window_conf() -> Conf {
     Conf {
         window_title: "RustPond - Nuclear Physics Simulation".to_owned(),
-        window_width: 1920,
-        window_height: 1080,
+        window_width: 1280,
+        window_height: 720,
         fullscreen: false,
         ..Default::default()
     }
@@ -27,7 +27,7 @@ async fn main() {
     // Initialize managers
     let mut ring_manager = RingManager::new();
     let mut atom_manager = AtomManager::new(100);
-    let mut proton_manager = ProtonManager::new(100);
+    let mut proton_manager = ProtonManager::new(300);
 
     let mut frame_count = 0;
     let mut fps_timer = 0.0;
@@ -56,8 +56,9 @@ async fn main() {
 
         // Draw everything
         ring_manager.draw(18);
-        atom_manager.draw(12);
+        // atom_manager.draw(12);  // Atoms are hidden - only used for backend calculations
         proton_manager.draw(24);
+        proton_manager.draw_labels();
 
         // Draw UI
         draw_text(&format!("FPS: {:.0}", fps), 10.0, 30.0, 30.0, GREEN);
@@ -65,7 +66,7 @@ async fn main() {
         draw_text(&format!("Atoms: {}", atom_manager.get_atom_count()), 10.0, 90.0, 30.0, GREEN);
         draw_text(&format!("Protons: {}", proton_manager.get_proton_count()), 10.0, 120.0, 30.0, GREEN);
         draw_text("RustPond v0.2", 10.0, 150.0, 20.0, GRAY);
-        draw_text("Click: Spawn Ring | C: Cycle Color | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
+        draw_text("Click: Spawn Ring | C: Cycle Color | Space: Clear All | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
 
         // Show current ring color
         let color_info = ring_manager.get_current_frequency_info();
@@ -89,6 +90,13 @@ async fn main() {
 
         // Clear all with R key
         if is_key_pressed(KeyCode::R) {
+            ring_manager.clear();
+            atom_manager.clear();
+            proton_manager.clear();
+        }
+
+        // Clear all with Space bar
+        if is_key_pressed(KeyCode::Space) {
             ring_manager.clear();
             atom_manager.clear();
             proton_manager.clear();

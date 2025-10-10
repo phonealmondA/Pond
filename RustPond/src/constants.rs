@@ -20,6 +20,7 @@ pub mod proton {
     // Movement
     pub const FRICTION: f32 = 1.0;
     pub const BOUNCE_DAMPENING: f32 = 0.7;
+    pub const MAX_SPEED: f32 = 200.0;  // Same as white ring speed
 
     // Size
     pub const MIN_RADIUS: f32 = 3.0;
@@ -51,7 +52,7 @@ pub mod proton {
     pub const NEUTRAL_PROTON_COLOR: (u8, u8, u8) = (200, 200, 200);
 
     // Neutron Formation
-    pub const NEUTRON_FORMATION_TIME: f32 = 0.25;
+    pub const NEUTRON_FORMATION_TIME: f32 = 0.1;
     pub const NEUTRON_RADIUS_MULTIPLIER: f32 = 1.2;
 
     // Electron Capture
@@ -61,8 +62,8 @@ pub mod proton {
     pub const NEGATIVE_DECAY_TIME: f32 = 5.0;
 
     // Fusion thresholds
-    pub const DEUTERIUM_FUSION_VELOCITY_THRESHOLD: f32 = 3.0;
-    pub const HELIUM3_FUSION_VELOCITY_THRESHOLD: f32 = 6.0;
+    pub const DEUTERIUM_FUSION_VELOCITY_THRESHOLD: f32 = 0.5;
+    pub const HELIUM3_FUSION_VELOCITY_THRESHOLD: f32 = 1.0;
     pub const FUSION_ENERGY_RELEASE: f32 = 80.0;
 
     // Helium colors
@@ -79,27 +80,43 @@ pub mod proton_manager {
     pub const REPULSION_STRENGTH: f32 = 8000.0;
     pub const REPULSION_SAFETY_FACTOR: f32 = 1.0;
 
+    // Charge-based forces
+    pub const CHARGE_INTERACTION_RANGE: f32 = 150.0;
+    pub const CHARGE_REPULSION_STRENGTH: f32 = 5000.0;
+    pub const CHARGE_ATTRACTION_STRENGTH: f32 = 4000.0;
+
+    // H (neutral deuterium) clustering forces
+    pub const H_ATTRACTION_RANGE: f32 = 100.0;
+    pub const H_ATTRACTION_STRENGTH: f32 = 6000.0;
+
+    // He4 clustering forces
+    pub const HE4_ATTRACTION_RANGE: f32 = 120.0;
+    pub const HE4_ATTRACTION_STRENGTH: f32 = 5000.0;
+
+    // Solid collision parameters
+    pub const COLLISION_ELASTICITY: f32 = 0.8;
+
     pub const ATOM_ATTRACTION_RANGE: f32 = 220.0;
     pub const ATOM_ATTRACTION_STRENGTH: f32 = 15000.0;
     pub const ATOM_REPULSION_STRENGTH: f32 = 8000.0;
     pub const NEUTRON_FORMATION_DISTANCE: f32 = 225.0;
 
-    pub const MIN_ATOM_ENERGY_THRESHOLD: f32 = 150.0;
-    pub const MIN_COMBINED_ENERGY: f32 = 100.0;
-    pub const COLLISION_THRESHOLD: f32 = 15.0;
-    pub const COOLDOWN_DISTANCE: f32 = 20.0;
-    pub const SPAWN_COOLDOWN_TIME: f32 = 0.5;
+    pub const MIN_ATOM_ENERGY_THRESHOLD: f32 = 30.0;
+    pub const MIN_COMBINED_ENERGY: f32 = 10.0;
+    pub const COLLISION_THRESHOLD: f32 = 70.0;
+    pub const COOLDOWN_DISTANCE: f32 = 10.0;
+    pub const SPAWN_COOLDOWN_TIME: f32 = 0.1;
     pub const MAX_SPAWN_SPEED: f32 = 400.0;
     pub const VELOCITY_ENERGY_FACTOR: f32 = 0.5;
-    pub const NEGATIVE_PROTON_ENERGY_THRESHOLD: f32 = 400.0;
+    pub const NEGATIVE_PROTON_ENERGY_THRESHOLD: f32 = 600.0;
 
     pub const FUSION_UPDATE_INTERVAL: i32 = 12;
 }
 
 // ===== ATOM PHYSICS =====
 pub mod atom {
-    pub const RADIUS_BASE: f32 = 1.8;
-    pub const RADIUS_ENERGY_FACTOR: f32 = 0.025;
+    pub const RADIUS_BASE: f32 = 8.0;
+    pub const RADIUS_ENERGY_FACTOR: f32 = 0.1;
 
     pub const LIFETIME_BASE: f32 = 5.0;
     pub const LIFETIME_ENERGY_FACTOR: f32 = 0.02;
@@ -127,13 +144,13 @@ pub mod ring {
     pub const COLOR_WEIGHT_GREEN: f32 = 0.3;
     pub const COLOR_WEIGHT_BLUE: f32 = 0.6;
     pub const COLOR_DIVISOR: f32 = 255.0;
-    pub const MIN_SPEED: f32 = 20.0;
-    pub const MAX_SPEED: f32 = 120.0;
+    pub const MIN_SPEED: f32 = 15.0;
+    pub const MAX_SPEED: f32 = 200.0;
 
     pub const INITIAL_RADIUS: f32 = 5.0;
     pub const RESET_RADIUS: f32 = 5.0;
     pub const MAX_RADIUS_THRESHOLD: f32 = 2000.0;
-    pub const DEFAULT_THICKNESS: f32 = 3.0;
+    pub const DEFAULT_THICKNESS: f32 = 6.0;
 
     pub const BOUNCE_REFLECTION_OPACITY: f32 = 0.7;
     pub const ALPHA_CALCULATION_DIVISOR: f32 = 800.0;
@@ -144,8 +161,8 @@ pub mod ring {
     pub const WINDOW_WIDTH_MULTIPLIER: f32 = 2.0;
     pub const WINDOW_HEIGHT_MULTIPLIER: f32 = 2.0;
 
-    pub const LOW_FREQUENCY_THRESHOLD: f32 = 40.0;
-    pub const MEDIUM_FREQUENCY_THRESHOLD: f32 = 80.0;
+    pub const LOW_FREQUENCY_THRESHOLD: f32 = 100.0;
+    pub const MEDIUM_FREQUENCY_THRESHOLD: f32 = 250.0;
 }
 
 // ===== SPATIAL GRID OPTIMIZATION =====

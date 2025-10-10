@@ -357,6 +357,31 @@ impl AtomManager {
         self.max_atoms
     }
 
+    /// Get reference to atoms for atom-proton interactions
+    pub fn get_atoms(&self) -> &[Option<PathFollowingAtom>] {
+        &self.atoms[..self.atom_count]
+    }
+
+    /// Mark atom at position for deletion (for electron capture)
+    pub fn mark_atom_at_position(&mut self, target_pos: Vec2) {
+        for atom_opt in &mut self.atoms[..self.atom_count] {
+            if let Some(atom) = atom_opt {
+                if atom.is_alive() {
+                    let atom_pos = atom.get_position();
+                    let dx = target_pos.x - atom_pos.x;
+                    let dy = target_pos.y - atom_pos.y;
+                    let dist_squared = dx * dx + dy * dy;
+
+                    // Mark the atom if it's at the target position (within 1px tolerance)
+                    if dist_squared < 1.0 {
+                        atom.mark_for_deletion();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     /// Get all shapes from rings (main + bounce shapes)
     fn get_all_shapes(&self, rings: &[Ring]) -> Vec<RingShape> {
         let mut shapes = Vec::new();

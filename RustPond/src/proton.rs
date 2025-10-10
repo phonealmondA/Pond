@@ -89,6 +89,12 @@ impl Proton {
             return;
         }
 
+        // Clamp velocity to max speed
+        let speed = self.velocity.length();
+        if speed > pc::MAX_SPEED {
+            self.velocity = (self.velocity / speed) * pc::MAX_SPEED;
+        }
+
         // Straight-line movement
         self.position += self.velocity * delta_time;
 
@@ -275,6 +281,10 @@ impl Proton {
     // Setters
     pub fn set_velocity(&mut self, velocity: Vec2) {
         self.velocity = velocity;
+        self.is_sleeping = false;
+    }
+    pub fn add_velocity(&mut self, delta_velocity: Vec2) {
+        self.velocity += delta_velocity;
         self.is_sleeping = false;
     }
     pub fn mark_for_deletion(&mut self) { self.marked_for_deletion = true; }
