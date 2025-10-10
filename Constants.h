@@ -9,7 +9,7 @@ namespace Constants
     // ===== SYSTEM LIMITS =====
     namespace System
     {
-        constexpr size_t MAX_PROTONS = 12;
+        constexpr size_t MAX_PROTONS = 25;
         constexpr size_t MAX_ATOMS = 35;
         constexpr int CIRCLE_SEGMENTS = 24;  // Number of segments for circle approximation
         constexpr int COLOR_PALETTE_SIZE = 35;  // Number of predefined ring colors
@@ -75,8 +75,8 @@ namespace Constants
         constexpr float NEGATIVE_DECAY_TIME = 5.0f;
 
         // Fusion thresholds
-        constexpr float DEUTERIUM_FUSION_VELOCITY_THRESHOLD = 250.0f;  // Speed needed for D + H fusion
-        constexpr float HELIUM3_FUSION_VELOCITY_THRESHOLD = 350.0f;    // Speed needed for He3 + He3 fusion
+        constexpr float DEUTERIUM_FUSION_VELOCITY_THRESHOLD = 50.0f;  // Speed needed for D + H fusion
+        constexpr float HELIUM3_FUSION_VELOCITY_THRESHOLD = 100.0f;    // Speed needed for He3 + He3 fusion
         constexpr float FUSION_ENERGY_RELEASE = 80.0f;                 // Energy released as wave
 
         // Helium colors
@@ -100,10 +100,10 @@ namespace Constants
         constexpr float REPULSION_SAFETY_FACTOR = 1.0f;  // Avoid division by zero
 
         // Atom Interactions
-        constexpr float ATOM_ATTRACTION_RANGE = 120.0f;
-        constexpr float ATOM_ATTRACTION_STRENGTH = 5000.0f;
+        constexpr float ATOM_ATTRACTION_RANGE = 220.0f;
+        constexpr float ATOM_ATTRACTION_STRENGTH = 15000.0f;
         constexpr float ATOM_REPULSION_STRENGTH = 8000.0f;
-        constexpr float NEUTRON_FORMATION_DISTANCE = 25.0f;
+        constexpr float NEUTRON_FORMATION_DISTANCE = 225.0f;
 
         // Spawning from Atom Collisions
         constexpr float MIN_ATOM_ENERGY_THRESHOLD = 150.0f;
