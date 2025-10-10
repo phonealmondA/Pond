@@ -9,7 +9,7 @@ namespace Constants
     // ===== SYSTEM LIMITS =====
     namespace System
     {
-        constexpr size_t MAX_PROTONS = 25;
+        constexpr size_t MAX_PROTONS = 75;
         constexpr size_t MAX_ATOMS = 35;
         constexpr int CIRCLE_SEGMENTS = 24;  // Number of segments for circle approximation
         constexpr int COLOR_PALETTE_SIZE = 35;  // Number of predefined ring colors
@@ -107,7 +107,7 @@ namespace Constants
 
         // Spawning from Atom Collisions
         constexpr float MIN_ATOM_ENERGY_THRESHOLD = 150.0f;
-        constexpr float MIN_COMBINED_ENERGY = 250.0f;
+        constexpr float MIN_COMBINED_ENERGY = 100.0f;
         constexpr float COLLISION_THRESHOLD = 15.0f;
         constexpr float COOLDOWN_DISTANCE = 20.0f;
         constexpr float SPAWN_COOLDOWN_TIME = 0.5f;  // Seconds

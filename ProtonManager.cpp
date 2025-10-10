@@ -567,3 +567,34 @@ void ProtonManager::handleNuclearFusion(RingManager& ringManager)
         }
     }
 }
+
+void ProtonManager::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
+{
+    // SFML 3.0: Text constructor requires font reference
+    sf::Text text(font);
+    text.setCharacterSize(12);
+    text.setFillColor(sf::Color::White);
+    text.setOutlineColor(sf::Color::Black);
+    text.setOutlineThickness(1.0f);
+
+    for (const auto& proton : m_protons)
+    {
+        if (proton && proton->isAlive())
+        {
+            std::string label = proton->getElementLabel();
+            text.setString(label);
+
+            // Center text above proton
+            sf::FloatRect bounds = text.getLocalBounds();
+            sf::Vector2f protonPos = proton->getPosition();
+            float protonRadius = proton->getRadius();
+
+            // SFML 3.0: Rect uses .size instead of .width/.height
+            text.setOrigin(sf::Vector2f(bounds.size.x / 2.0f, bounds.size.y));
+            // SFML 3.0: setPosition takes Vector2f
+            text.setPosition(sf::Vector2f(protonPos.x, protonPos.y - protonRadius + 6.0f));
+
+            window.draw(text);
+        }
+    }
+}

@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <string>
 #include "Constants.h"
 
 // Proton - A rare, persistent physics particle spawned from high-energy atom collisions
@@ -52,6 +53,9 @@ public:
     int getCharge() const { return m_charge; }
     int getNeutronCount() const { return m_neutronCount; }
     bool isStableHydrogen() const { return m_isStableHydrogen; }
+
+    // Get element label for display
+    std::string getElementLabel() const;
 
     // Setters for physics interactions
     void setVelocity(sf::Vector2f velocity) { m_velocity = velocity; }

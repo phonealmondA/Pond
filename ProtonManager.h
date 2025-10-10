@@ -31,6 +31,9 @@ public:
     // Render all protons to batch renderer
     void addToBatch(class BatchRenderer& batchRenderer) const;
 
+    // Draw element labels for all protons
+    void drawLabels(sf::RenderWindow& window, const sf::Font& font) const;
+
     // Management
     void clear();
     size_t getProtonCount() const;

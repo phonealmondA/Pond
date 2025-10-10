@@ -10,6 +10,17 @@ int main()
     // Create a window with 800x600 resolution
     sf::RenderWindow window(sf::VideoMode({ 800, 600 }), "Pond - Enhanced Wave Interference with Global Atom System");
 
+    // Load font for proton labels
+    sf::Font font;
+    if (!font.openFromFile("arial.ttf"))
+    {
+        // Try common system font locations
+        if (!font.openFromFile("C:/Windows/Fonts/arial.ttf"))
+        {
+            std::cout << "Warning: Could not load font. Labels will not display." << std::endl;
+        }
+    }
+
     // Ring manager to handle all rings
     RingManager ringManager;
 
@@ -163,6 +174,9 @@ int main()
         }
         protonManager.addToBatch(batchRenderer);  // Always render protons
         batchRenderer.end(window);
+
+        // Draw proton labels (text can't be batched)
+        protonManager.drawLabels(window, font);
 
         window.display();
     }

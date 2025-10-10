@@ -261,3 +261,40 @@ bool Proton::tryCaptureElectron(const PathFollowingAtom& electron)
 
     return false;
 }
+
+std::string Proton::getElementLabel() const
+{
+    // Helium-4 (charge +2, neutrons 2)
+    if (m_charge == +2 && m_neutronCount == 2)
+    {
+        return "He4";
+    }
+    // Helium-3 (charge +1, neutrons 2)
+    else if (m_charge == +1 && m_neutronCount == 2)
+    {
+        return "He3";
+    }
+    // Negative hydrogen (antiproton-like)
+    else if (m_charge == -1)
+    {
+        return "H-";
+    }
+    // Neutral hydrogen (deuterium with neutron, or bare neutron)
+    else if (m_charge == 0 && m_neutronCount == 1)
+    {
+        return "H";
+    }
+    // Bare proton (charge +1, no neutrons)
+    else if (m_charge == +1 && m_neutronCount == 0)
+    {
+        return "H+";
+    }
+    // Stable hydrogen (charge 0, neutron 1, electron captured)
+    else if (m_isStableHydrogen)
+    {
+        return "H1";
+    }
+
+    // Fallback
+    return "?";
+}
