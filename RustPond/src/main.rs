@@ -3,9 +3,14 @@
 
 mod constants;
 mod proton;
+mod ring;
+mod atom;
+mod proton_manager;
 
 use macroquad::prelude::*;
-use proton::Proton;
+use ring::RingManager;
+use atom::AtomManager;
+use proton_manager::ProtonManager;
 
 fn window_conf() -> Conf {
     Conf {
@@ -19,24 +24,10 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    // Test with a few protons
-    let mut protons: Vec<Proton> = Vec::new();
-
-    // Spawn initial protons
-    for i in 0..5 {
-        let x = 200.0 + (i as f32 * 100.0);
-        let y = 200.0;
-        let velocity = vec2((i as f32 - 2.0) * 20.0, 50.0);
-        let energy = 50.0 + (i as f32 * 10.0);
-
-        protons.push(Proton::new(
-            vec2(x, y),
-            velocity,
-            WHITE,
-            energy,
-            1, // charge
-        ));
-    }
+    // Initialize managers
+    let mut ring_manager = RingManager::new();
+    let mut atom_manager = AtomManager::new(100);
+    let mut proton_manager = ProtonManager::new(100);
 
     let mut frame_count = 0;
     let mut fps_timer = 0.0;
@@ -55,55 +46,55 @@ async fn main() {
             frame_count = 0;
         }
 
-        // Update
-        for proton in &mut protons {
-            proton.update(delta_time, window_size);
-        }
+        // Update systems
+        ring_manager.update(delta_time, window_size);
+        atom_manager.update(delta_time, ring_manager.get_all_rings(), window_size);
+        proton_manager.update(delta_time, window_size, &mut atom_manager, &mut ring_manager);
 
         // Render
         clear_background(BLACK);
 
-        // Draw protons with LOD
-        for proton in &protons {
-            let segments = calculate_lod(proton.radius());
-            proton.render(segments);
-        }
+        // Draw everything
+        ring_manager.draw(18);
+        atom_manager.draw(12);
+        proton_manager.draw(24);
 
         // Draw UI
         draw_text(&format!("FPS: {:.0}", fps), 10.0, 30.0, 30.0, GREEN);
-        draw_text(&format!("Protons: {}", protons.len()), 10.0, 60.0, 30.0, GREEN);
-        draw_text("RustPond v0.1 - Press ESC to exit", 10.0, 90.0, 20.0, GRAY);
+        draw_text(&format!("Rings: {}", ring_manager.get_ring_count()), 10.0, 60.0, 30.0, GREEN);
+        draw_text(&format!("Atoms: {}", atom_manager.get_atom_count()), 10.0, 90.0, 30.0, GREEN);
+        draw_text(&format!("Protons: {}", proton_manager.get_proton_count()), 10.0, 120.0, 30.0, GREEN);
+        draw_text("RustPond v0.2", 10.0, 150.0, 20.0, GRAY);
+        draw_text("Click: Spawn Ring | C: Cycle Color | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
 
-        // Input
+        // Show current ring color
+        let color_info = ring_manager.get_current_frequency_info();
+        draw_text(&color_info, 10.0, 210.0, 18.0, LIGHTGRAY);
+
+        // Input handling
         if is_key_pressed(KeyCode::Escape) {
             break;
         }
 
-        // Spawn proton on click
+        // Spawn ring on click
         if is_mouse_button_pressed(MouseButton::Left) {
             let mouse_pos = mouse_position();
-            protons.push(Proton::new(
-                vec2(mouse_pos.0, mouse_pos.1),
-                vec2(rand::gen_range(-100.0, 100.0), rand::gen_range(-100.0, 100.0)),
-                WHITE,
-                100.0,
-                1,
-            ));
+            ring_manager.add_ring(vec2(mouse_pos.0, mouse_pos.1));
+        }
+
+        // Cycle color with C key
+        if is_key_pressed(KeyCode::C) {
+            ring_manager.cycle_to_next_color();
+        }
+
+        // Clear all with R key
+        if is_key_pressed(KeyCode::R) {
+            ring_manager.clear();
+            atom_manager.clear();
+            proton_manager.clear();
         }
 
         next_frame().await
     }
 }
 
-// LOD system for performance
-fn calculate_lod(radius: f32) -> i32 {
-    if radius < 3.0 {
-        6
-    } else if radius < 6.0 {
-        12
-    } else if radius < 12.0 {
-        18
-    } else {
-        24
-    }
-}
