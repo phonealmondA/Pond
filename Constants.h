@@ -75,8 +75,8 @@ namespace Constants
         constexpr float NEGATIVE_DECAY_TIME = 5.0f;
 
         // Fusion thresholds
-        constexpr float DEUTERIUM_FUSION_VELOCITY_THRESHOLD = 50.0f;  // Speed needed for D + H fusion
-        constexpr float HELIUM3_FUSION_VELOCITY_THRESHOLD = 100.0f;    // Speed needed for He3 + He3 fusion
+        constexpr float DEUTERIUM_FUSION_VELOCITY_THRESHOLD = 30.0f;  // Speed needed for D + H fusion (reduced from 50)
+        constexpr float HELIUM3_FUSION_VELOCITY_THRESHOLD = 60.0f;    // Speed needed for He3 + He3 fusion (reduced from 100)
         constexpr float FUSION_ENERGY_RELEASE = 80.0f;                 // Energy released as wave
 
         // Helium colors

@@ -84,21 +84,23 @@ void ProtonManager::update(float deltaTime, const sf::Vector2u& windowSize, cons
 
     // Handle proton-proton interactions
     handleProtonProtonRepulsion(deltaTime);
-    handleProtonProtonAbsorption();
 
-    // Handle nuclear fusion
+    // Handle nuclear fusion (MUST happen before absorption to allow He formation)
     handleNuclearFusion(ringManager);
+
+    // Handle absorption (only for non-fusable collisions)
+    handleProtonProtonAbsorption();
 
     // Detect high-energy atom collisions and spawn new protons
     detectAndSpawnFromAtomCollisions(atomManager);
 
-    // Remove dead protons and protons marked for deletion (but preserve stable hydrogen)
+    // Remove dead protons and protons marked for deletion (but preserve stable hydrogen and He4)
     for (auto& proton : m_protons)
     {
         if (proton && (!proton->isAlive() || proton->isMarkedForDeletion()))
         {
-            // Never remove stable hydrogen
-            if (!proton->isStableHydrogen())
+            // Never remove stable hydrogen or stable Helium-4
+            if (!proton->isStableHydrogen() && !proton->isStableHelium4())
             {
                 proton.reset();
             }
@@ -121,8 +123,8 @@ void ProtonManager::clear()
 {
     for (auto& proton : m_protons)
     {
-        // Only reset unstable protons - stable hydrogen survives clear
-        if (proton && !proton->isStableHydrogen())
+        // Only reset unstable protons - stable hydrogen and He4 survive clear
+        if (proton && !proton->isStableHydrogen() && !proton->isStableHelium4())
         {
             proton.reset();
         }
@@ -136,8 +138,8 @@ size_t ProtonManager::getProtonCount() const
     size_t count = 0;
     for (const auto& proton : m_protons)
     {
-        // Only count unstable protons - stable hydrogen doesn't count toward MAX_PROTONS limit
-        if (proton && proton->isAlive() && !proton->isStableHydrogen())
+        // Only count unstable protons - stable hydrogen and He4 don't count toward MAX_PROTONS limit
+        if (proton && proton->isAlive() && !proton->isStableHydrogen() && !proton->isStableHelium4())
         {
             count++;
         }
@@ -206,15 +208,15 @@ void ProtonManager::handleProtonProtonAbsorption()
     {
         if (!m_protons[i] || !m_protons[i]->isAlive()) continue;
 
-        // Skip stable hydrogen - it never gets absorbed
-        if (m_protons[i]->isStableHydrogen()) continue;
+        // Skip stable particles - they never get absorbed
+        if (m_protons[i]->isStableHydrogen() || m_protons[i]->isStableHelium4()) continue;
 
         for (size_t j = i + 1; j < m_protons.size(); ++j)
         {
             if (!m_protons[j] || !m_protons[j]->isAlive()) continue;
 
-            // Skip stable hydrogen - it never gets absorbed
-            if (m_protons[j]->isStableHydrogen()) continue;
+            // Skip stable particles - they never get absorbed
+            if (m_protons[j]->isStableHydrogen() || m_protons[j]->isStableHelium4()) continue;
 
             // Calculate distance between protons
             sf::Vector2f pos1 = m_protons[i]->getPosition();
@@ -451,12 +453,12 @@ void ProtonManager::handleNuclearFusion(RingManager& ringManager)
     for (size_t i = 0; i < m_protons.size(); ++i)
     {
         if (!m_protons[i] || !m_protons[i]->isAlive()) continue;
-        if (m_protons[i]->isStableHydrogen()) continue;
+        if (m_protons[i]->isStableHydrogen() || m_protons[i]->isStableHelium4()) continue;
 
         for (size_t j = i + 1; j < m_protons.size(); ++j)
         {
             if (!m_protons[j] || !m_protons[j]->isAlive()) continue;
-            if (m_protons[j]->isStableHydrogen()) continue;
+            if (m_protons[j]->isStableHydrogen() || m_protons[j]->isStableHelium4()) continue;
 
             // Get proton data
             sf::Vector2f pos1 = m_protons[i]->getPosition();

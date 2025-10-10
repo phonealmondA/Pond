@@ -17,7 +17,6 @@ Proton::Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, fl
     , m_neutronCount(0)
     , m_isStableHydrogen(false)
     , m_waveFieldTimer(0.0f)
-    , m_decayTimer(0.0f)
 {
     m_radius = calculateRadius(energy);
     m_mass = calculateMass(energy);
@@ -40,17 +39,6 @@ void Proton::update(float deltaTime, const sf::Vector2u& windowSize)
     {
         m_isAlive = false;
         return;
-    }
-
-    // Negative proton decay system
-    if (m_charge == -1)
-    {
-        m_decayTimer += deltaTime;
-        if (m_decayTimer >= Constants::Proton::NEGATIVE_DECAY_TIME)
-        {
-            m_charge = +1;
-            m_decayTimer = 0.0f;
-        }
     }
 
     // Friction removed to simulate vacuum

@@ -29,9 +29,6 @@ private:
     bool m_isStableHydrogen;
     float m_waveFieldTimer;
 
-    // Negative proton decay system
-    float m_decayTimer;
-
 public:
     Proton(sf::Vector2f position, sf::Vector2f velocity, sf::Color color, float energy, int charge = +1);
 
@@ -53,6 +50,7 @@ public:
     int getCharge() const { return m_charge; }
     int getNeutronCount() const { return m_neutronCount; }
     bool isStableHydrogen() const { return m_isStableHydrogen; }
+    bool isStableHelium4() const { return m_charge == +2 && m_neutronCount == 2; }
 
     // Get element label for display
     std::string getElementLabel() const;
