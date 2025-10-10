@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Read(//d/MyGameFly/SFML-3.0.0-windows-vc17-64-bit/SFML-3.0.0/include/SFML/Graphics/**)",
-      "Bash(cargo:*)"
+      "Bash(cargo:*)",
+      "Bash(rm -f *.cpp *.h pond.vcxproj pond.vcxproj.filters pond.vcxproj.user)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
