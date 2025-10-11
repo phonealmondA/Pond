@@ -111,6 +111,11 @@ pub mod proton_manager {
     pub const NEGATIVE_PROTON_ENERGY_THRESHOLD: f32 = 600.0;
 
     pub const FUSION_UPDATE_INTERVAL: i32 = 12;
+
+    // Red wave repulsion for H- protons
+    pub const RED_WAVE_REPULSION_STRENGTH: f32 = 5000.0;
+    pub const RED_WAVE_INTERACTION_THRESHOLD: f32 = 100.0; // Speed threshold to be "red"
+    pub const RED_WAVE_REPULSION_WIDTH: f32 = 15.0; // Thickness of interaction zone
 }
 
 // ===== ATOM PHYSICS =====

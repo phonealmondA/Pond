@@ -47,6 +47,9 @@ impl ProtonManager {
         // STEP 2: Charge-based forces (H+/H- interactions and H clustering)
         self.apply_charge_forces(delta_time);
 
+        // STEP 2.5: Red wave repulsion (only affects H-)
+        self.apply_red_wave_repulsion(delta_time, ring_manager);
+
         // STEP 3: Solid collisions (H and He4)
         self.handle_solid_collisions();
 
@@ -160,12 +163,12 @@ impl ProtonManager {
         }
     }
 
-    /// Clear all protons (except stable ones and H-)
+    /// Clear all protons (except stable ones)
     pub fn clear(&mut self) {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
-                // Preserve stable H1, He4, and H- (negative protons)
-                if !proton.is_stable_hydrogen() && !proton.is_stable_helium4() && proton.charge() != -1 {
+                // Preserve stable H1 and He4 only
+                if !proton.is_stable_hydrogen() && !proton.is_stable_helium4() {
                     *proton_opt = None;
                 }
             }
@@ -336,6 +339,81 @@ impl ProtonManager {
         }
 
         // Apply accumulated forces to velocities
+        for (i, force) in forces.iter().enumerate() {
+            if force.length_squared() > 0.0001 {
+                if let Some(proton) = &mut self.protons[i] {
+                    if proton.is_alive() {
+                        let acceleration = *force / proton.mass();
+                        proton.add_velocity(acceleration * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Apply repulsion force from red (low-frequency) waves to H-, He3, He4, and H protons
+    fn apply_red_wave_repulsion(&mut self, delta_time: f32, ring_manager: &RingManager) {
+        // Get all rings
+        let rings = ring_manager.get_all_rings();
+
+        // Collect protons affected by red waves: H-, He3, He4, and H (neutral deuterium)
+        let mut affected_protons: Vec<(usize, Vec2, f32)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() {
+                    let charge = proton.charge();
+                    let neutron_count = proton.neutron_count();
+
+                    // Check if this proton type is affected by red waves
+                    let is_affected = charge == -1  // H-
+                        || (charge == 1 && neutron_count == 2)  // He3
+                        || (charge == 2 && neutron_count == 2)  // He4
+                        || (charge == 0 && neutron_count == 1); // H (neutral deuterium)
+
+                    if is_affected {
+                        affected_protons.push((i, proton.position(), proton.mass()));
+                    }
+                }
+            }
+        }
+
+        // Calculate repulsion forces from red waves
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+
+        for (idx, proton_pos, _mass) in &affected_protons {
+            for ring in rings {
+                // Check if ring is red/slow (low frequency)
+                if ring.get_growth_speed() > pm::RED_WAVE_INTERACTION_THRESHOLD {
+                    continue; // Skip fast/blue rings
+                }
+
+                // Get ring center and radius
+                let ring_center = ring.get_center();
+                let ring_radius = ring.get_radius();
+
+                // Calculate distance from proton to ring center
+                let delta = *proton_pos - ring_center;
+                let dist_to_center = delta.length();
+
+                // Check if proton is near the ring's circumference
+                let dist_to_edge = (dist_to_center - ring_radius).abs();
+
+                if dist_to_edge < pm::RED_WAVE_REPULSION_WIDTH {
+                    // Proton is near the ring - apply radial repulsion
+                    if dist_to_center > 1.0 {
+                        let dir = delta / dist_to_center; // Direction away from center
+
+                        // Stronger force when closer to the edge
+                        let proximity_factor = 1.0 - (dist_to_edge / pm::RED_WAVE_REPULSION_WIDTH);
+                        let force_magnitude = pm::RED_WAVE_REPULSION_STRENGTH * proximity_factor;
+
+                        forces[*idx] += dir * force_magnitude;
+                    }
+                }
+            }
+        }
+
+        // Apply forces to affected protons
         for (i, force) in forces.iter().enumerate() {
             if force.length_squared() > 0.0001 {
                 if let Some(proton) = &mut self.protons[i] {
@@ -560,9 +638,17 @@ impl ProtonManager {
                         he4.set_max_lifetime(-1.0); // Helium-4 is stable
                         self.protons[i] = Some(he4);
 
-                        // Spawn BIG energy waves (He3 + He3 → He4 - highest energy)
-                        ring_manager.add_energy_ring(center_of_mass, combined_energy);
-                        ring_manager.add_energy_ring(center_of_mass, combined_energy);
+                        // Spawn BIG energy waves with random colors between blue and white
+                        // Blue = (0,0,1), White = (1,1,1)
+                        // Random interpolation: (t, t, 1) where t ∈ [0,1]
+                        use macroquad::rand::gen_range;
+                        let t1 = gen_range(0.0, 1.0);
+                        let color1 = Color::new(t1, t1, 1.0, 1.0);
+                        ring_manager.add_ring_with_color(center_of_mass, color1);
+
+                        let t2 = gen_range(0.0, 1.0);
+                        let color2 = Color::new(t2, t2, 1.0, 1.0);
+                        ring_manager.add_ring_with_color(center_of_mass, color2);
 
                         // Spawn 2 high-energy protons
                         let release_speed = 200.0;
@@ -739,9 +825,11 @@ impl ProtonManager {
             if self.protons[i].is_none() || !self.protons[i].as_ref().unwrap().is_alive() {
                 let mut proton = Proton::new(position, velocity, color, energy, charge);
 
-                // Make H+, H-, and basic protons permanent (infinite lifetime)
-                // Only He3 and fusion products should have limited lifetime
-                proton.set_max_lifetime(proton::INFINITE_LIFETIME);
+                // Make H+ protons permanent (infinite lifetime)
+                // H- decays like He3 (default 20s lifetime)
+                if charge == 1 {
+                    proton.set_max_lifetime(proton::INFINITE_LIFETIME);
+                }
 
                 self.protons[i] = Some(proton);
 

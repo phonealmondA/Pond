@@ -337,6 +337,12 @@ impl RingManager {
             .push(Ring::new(position, color, DEFAULT_RING_THICKNESS));
     }
 
+    /// Add a ring with a custom color
+    pub fn add_ring_with_color(&mut self, position: Vec2, color: Color) {
+        self.rings
+            .push(Ring::new(position, color, DEFAULT_RING_THICKNESS));
+    }
+
     /// Update all rings
     pub fn update(&mut self, delta_time: f32, window_size: (f32, f32)) {
         // Update all rings
