@@ -63,8 +63,8 @@ pub mod proton {
 
     // Fusion thresholds
     pub const DEUTERIUM_FUSION_VELOCITY_THRESHOLD: f32 = 0.5;
-    pub const HELIUM3_FUSION_VELOCITY_THRESHOLD: f32 = 1.0;
-    pub const FUSION_ENERGY_RELEASE: f32 = 80.0;
+    pub const HELIUM3_FUSION_VELOCITY_THRESHOLD: f32 = 0.6;
+    pub const FUSION_ENERGY_RELEASE: f32 = 30.0;
 
     // Helium colors
     pub const HELIUM3_COLOR: (u8, u8, u8) = (255, 200, 100);
@@ -76,22 +76,22 @@ pub mod proton {
 
 // ===== PROTON MANAGER PHYSICS =====
 pub mod proton_manager {
-    pub const REPULSION_RANGE: f32 = 80.0;
-    pub const REPULSION_STRENGTH: f32 = 8000.0;
+    pub const REPULSION_RANGE: f32 = 180.0;
+    pub const REPULSION_STRENGTH: f32 = 2000.0;
     pub const REPULSION_SAFETY_FACTOR: f32 = 1.0;
 
     // Charge-based forces
     pub const CHARGE_INTERACTION_RANGE: f32 = 150.0;
-    pub const CHARGE_REPULSION_STRENGTH: f32 = 5000.0;
-    pub const CHARGE_ATTRACTION_STRENGTH: f32 = 4000.0;
+    pub const CHARGE_REPULSION_STRENGTH: f32 = 1000.0;
+    pub const CHARGE_ATTRACTION_STRENGTH: f32 = 800.0;
 
     // H (neutral deuterium) clustering forces
-    pub const H_ATTRACTION_RANGE: f32 = 100.0;
-    pub const H_ATTRACTION_STRENGTH: f32 = 6000.0;
+    pub const H_ATTRACTION_RANGE: f32 = 1100.0;
+    pub const H_ATTRACTION_STRENGTH: f32 = 600.0;
 
     // He4 clustering forces
-    pub const HE4_ATTRACTION_RANGE: f32 = 120.0;
-    pub const HE4_ATTRACTION_STRENGTH: f32 = 5000.0;
+    pub const HE4_ATTRACTION_RANGE: f32 = 1420.0;
+    pub const HE4_ATTRACTION_STRENGTH: f32 = 500.0;
 
     // Solid collision parameters
     pub const COLLISION_ELASTICITY: f32 = 0.8;

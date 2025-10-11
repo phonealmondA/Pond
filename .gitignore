@@ -1,7 +1,34 @@
-.vs/
-x64/
-*.sln
-
-# Rust
-RustPond/target/
+# Rust build artifacts
+target/
 **/*.rs.bk
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Build outputs
+*.exe
+*.pdb
+*.dll
+*.so
+*.dylib
+
+# Backup files
+*.bak
+*.tmp
+
+# Local development
+.env
+.env.local
+
+# Documentation builds (if generated)
+book/
+docs/_build/
