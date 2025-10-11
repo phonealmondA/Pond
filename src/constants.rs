@@ -4,8 +4,8 @@
 use macroquad::prelude::*;
 
 // ===== SYSTEM LIMITS =====
-pub const MAX_PROTONS: usize = 100;
-pub const MAX_ATOMS: usize = 100;
+pub const MAX_PROTONS: usize = 500;
+pub const MAX_ATOMS: usize = 50;
 pub const CIRCLE_SEGMENTS: i32 = 24;
 pub const COLOR_PALETTE_SIZE: usize = 35;
 pub const COLOR_CYCLE_SIZE: usize = 6;
@@ -116,6 +116,21 @@ pub mod proton_manager {
     pub const RED_WAVE_REPULSION_STRENGTH: f32 = 5000.0;
     pub const RED_WAVE_INTERACTION_THRESHOLD: f32 = 100.0; // Speed threshold to be "red"
     pub const RED_WAVE_REPULSION_WIDTH: f32 = 15.0; // Thickness of interaction zone
+
+    // Red wave melting for H ice
+    pub const DARK_RED_WAVE_SPEED_THRESHOLD: f32 = 30.0; // Only lowest 5 red colors
+    pub const RED_WAVE_HITS_TO_MELT: u8 = 5; // Number of hits needed to melt ice
+    pub const RED_WAVE_HIT_COOLDOWN: f32 = 0.3; // Cooldown between hits to prevent double-counting
+
+    // H crystallization (phase transitions)
+    pub const H_CRYSTAL_MIN_NEIGHBORS: usize = 9; // Minimum H's to crystallize (1 center + 6 sides)
+    pub const H_CRYSTAL_NEIGHBOR_DISTANCE: f32 = 110.0; // Max distance to be neighbors
+    pub const H_CRYSTAL_MIN_SPACING: f32 = 40.0; // Minimum distance - too close particles cannot bond
+    pub const H_CRYSTAL_BOND_STRENGTH: f32 = 100.0; // Spring force between bonded H's (very strong)
+    pub const H_CRYSTAL_BOND_REST_LENGTH: f32 = 65.0; // Ideal distance from center to sides
+    pub const H_CRYSTAL_VIBRATION_THRESHOLD: f32 = 90.0; // Space needed to start vibrating
+    pub const H_CRYSTAL_BREAKOFF_DISTANCE: f32 = 200.0; // Distance at which bonds break
+    pub const H_CRYSTAL_FREEZE_COOLDOWN: f32 = 3.0; // Cooldown time before can refreeze after melting
 }
 
 // ===== ATOM PHYSICS =====

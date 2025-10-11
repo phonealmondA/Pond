@@ -30,6 +30,14 @@ pub struct Proton {
 
     // Sleeping system for optimization
     is_sleeping: bool,
+
+    // Crystallization system (for H phase transitions)
+    is_crystallized: bool,
+    crystal_bonds: Vec<usize>, // Indices of bonded protons
+    vibration_phase: f32, // For vibration animation
+    red_wave_hits: u8, // Count of dark red wave hits (for melting)
+    freeze_cooldown: f32, // Time before can crystallize again after melting
+    last_red_wave_hit_time: f32, // Tracks time of last hit to prevent double-counting
 }
 
 impl Proton {
@@ -57,6 +65,12 @@ impl Proton {
             is_stable_hydrogen: false,
             wave_field_timer: 0.0,
             is_sleeping: false,
+            is_crystallized: false,
+            crystal_bonds: Vec::new(),
+            vibration_phase: 0.0,
+            red_wave_hits: 0,
+            freeze_cooldown: 0.0,
+            last_red_wave_hit_time: -999.0,
         }
     }
 
@@ -67,6 +81,19 @@ impl Proton {
 
         // Always update visual pulse
         self.pulse_timer += delta_time;
+
+        // Update vibration phase for crystallized particles
+        if self.is_crystallized {
+            self.vibration_phase += delta_time * 5.0; // 5 rad/s
+        }
+
+        // Update freeze cooldown
+        if self.freeze_cooldown > 0.0 {
+            self.freeze_cooldown -= delta_time;
+            if self.freeze_cooldown < 0.0 {
+                self.freeze_cooldown = 0.0;
+            }
+        }
 
         // SLEEPING OPTIMIZATION
         if self.is_stable_hydrogen || self.is_stable_helium4() {
@@ -277,6 +304,9 @@ impl Proton {
     pub fn is_stable_hydrogen(&self) -> bool { self.is_stable_hydrogen }
     pub fn is_stable_helium4(&self) -> bool { self.charge == 2 && self.neutron_count == 2 }
     pub fn is_sleeping(&self) -> bool { self.is_sleeping }
+    pub fn is_crystallized(&self) -> bool { self.is_crystallized }
+    pub fn crystal_bonds(&self) -> &Vec<usize> { &self.crystal_bonds }
+    pub fn vibration_phase(&self) -> f32 { self.vibration_phase }
 
     // Setters
     pub fn set_velocity(&mut self, velocity: Vec2) {
@@ -291,4 +321,23 @@ impl Proton {
     pub fn set_neutron_count(&mut self, count: i32) { self.neutron_count = count; }
     pub fn set_max_lifetime(&mut self, lifetime: f32) { self.max_lifetime = lifetime; }
     pub fn wake(&mut self) { self.is_sleeping = false; }
+    pub fn set_crystallized(&mut self, crystallized: bool) { self.is_crystallized = crystallized; }
+    pub fn set_crystal_bonds(&mut self, bonds: Vec<usize>) { self.crystal_bonds = bonds; }
+    pub fn clear_crystal_bonds(&mut self) { self.crystal_bonds.clear(); }
+    pub fn add_crystal_bond(&mut self, index: usize) {
+        if !self.crystal_bonds.contains(&index) {
+            self.crystal_bonds.push(index);
+        }
+    }
+    pub fn red_wave_hits(&self) -> u8 { self.red_wave_hits }
+    pub fn increment_red_wave_hits(&mut self) {
+        if self.red_wave_hits < 255 {
+            self.red_wave_hits += 1;
+        }
+    }
+    pub fn reset_red_wave_hits(&mut self) { self.red_wave_hits = 0; }
+    pub fn freeze_cooldown(&self) -> f32 { self.freeze_cooldown }
+    pub fn set_freeze_cooldown(&mut self, cooldown: f32) { self.freeze_cooldown = cooldown; }
+    pub fn last_red_wave_hit_time(&self) -> f32 { self.last_red_wave_hit_time }
+    pub fn set_last_red_wave_hit_time(&mut self, time: f32) { self.last_red_wave_hit_time = time; }
 }

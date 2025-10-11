@@ -13,6 +13,7 @@ pub struct ProtonManager {
     next_slot: usize,
     max_protons: usize,
     spawn_cooldowns: Vec<(Vec2, f32)>,
+    elapsed_time: f32, // Total elapsed time for tracking wave hits
 }
 
 impl ProtonManager {
@@ -27,6 +28,7 @@ impl ProtonManager {
             next_slot: 0,
             max_protons,
             spawn_cooldowns: Vec::new(),
+            elapsed_time: 0.0,
         }
     }
 
@@ -38,6 +40,9 @@ impl ProtonManager {
         atom_manager: &mut AtomManager,
         ring_manager: &mut RingManager,
     ) {
+        // Track elapsed time
+        self.elapsed_time += delta_time;
+
         // Update cooldowns
         self.update_cooldowns(delta_time);
 
@@ -49,6 +54,9 @@ impl ProtonManager {
 
         // STEP 2.5: Red wave repulsion (only affects H-)
         self.apply_red_wave_repulsion(delta_time, ring_manager);
+
+        // STEP 2.6: H crystallization (phase transitions)
+        self.update_h_crystallization(delta_time);
 
         // STEP 3: Solid collisions (H and He4)
         self.handle_solid_collisions();
@@ -127,10 +135,42 @@ impl ProtonManager {
 
     /// Draw all protons
     pub fn draw(&self, segments: i32) {
+        // First draw crystal bonds
+        self.draw_crystal_bonds();
+
+        // Then draw protons on top
         for proton_opt in &self.protons {
             if let Some(proton) = proton_opt {
                 if proton.is_alive() {
                     proton.render(segments);
+                }
+            }
+        }
+    }
+
+    /// Draw crystal bond lines for hexagonal ice structure
+    fn draw_crystal_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_crystallized() {
+                    let pos1 = proton.position();
+                    let bonds = proton.crystal_bonds();
+
+                    // Draw bond lines to each bonded neighbor
+                    for bond_idx in bonds {
+                        // Only draw each bond once (from lower index to higher)
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_crystallized() {
+                                    let pos2 = other_proton.position();
+
+                                    // Draw thin white/cyan line for bond
+                                    let bond_color = Color::from_rgba(180, 220, 255, 180);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 1.5, bond_color);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -352,12 +392,13 @@ impl ProtonManager {
     }
 
     /// Apply repulsion force from red (low-frequency) waves to H-, He3, He4, and H protons
+    /// Dark red waves (lowest 5 colors) MELT ice bonds after 5 hits
     fn apply_red_wave_repulsion(&mut self, delta_time: f32, ring_manager: &RingManager) {
         // Get all rings
         let rings = ring_manager.get_all_rings();
 
         // Collect protons affected by red waves: H-, He3, He4, and H (neutral deuterium)
-        let mut affected_protons: Vec<(usize, Vec2, f32)> = Vec::new();
+        let mut affected_protons: Vec<(usize, Vec2, f32, bool)> = Vec::new();
         for (i, proton_opt) in self.protons.iter().enumerate() {
             if let Some(proton) = proton_opt {
                 if proton.is_alive() {
@@ -371,19 +412,23 @@ impl ProtonManager {
                         || (charge == 0 && neutron_count == 1); // H (neutral deuterium)
 
                     if is_affected {
-                        affected_protons.push((i, proton.position(), proton.mass()));
+                        let is_frozen = proton.is_crystallized();
+                        affected_protons.push((i, proton.position(), proton.mass(), is_frozen));
                     }
                 }
             }
         }
 
-        // Calculate repulsion forces from red waves
+        // Calculate repulsion forces from red waves and detect melting hits
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        let mut hit_by_dark_red: Vec<bool> = vec![false; self.protons.len()];
 
-        for (idx, proton_pos, _mass) in &affected_protons {
+        for (idx, proton_pos, _mass, is_frozen) in &affected_protons {
             for ring in rings {
+                let ring_speed = ring.get_growth_speed();
+
                 // Check if ring is red/slow (low frequency)
-                if ring.get_growth_speed() > pm::RED_WAVE_INTERACTION_THRESHOLD {
+                if ring_speed > pm::RED_WAVE_INTERACTION_THRESHOLD {
                     continue; // Skip fast/blue rings
                 }
 
@@ -399,27 +444,296 @@ impl ProtonManager {
                 let dist_to_edge = (dist_to_center - ring_radius).abs();
 
                 if dist_to_edge < pm::RED_WAVE_REPULSION_WIDTH {
-                    // Proton is near the ring - apply radial repulsion
+                    // Proton is near the ring
                     if dist_to_center > 1.0 {
                         let dir = delta / dist_to_center; // Direction away from center
-
-                        // Stronger force when closer to the edge
                         let proximity_factor = 1.0 - (dist_to_edge / pm::RED_WAVE_REPULSION_WIDTH);
-                        let force_magnitude = pm::RED_WAVE_REPULSION_STRENGTH * proximity_factor;
 
+                        // MELTING: Track hits from dark red waves (lowest 5 colors)
+                        if *is_frozen && ring_speed <= pm::DARK_RED_WAVE_SPEED_THRESHOLD {
+                            hit_by_dark_red[*idx] = true;
+                        }
+
+                        // Apply radial repulsion force
+                        let force_magnitude = pm::RED_WAVE_REPULSION_STRENGTH * proximity_factor;
                         forces[*idx] += dir * force_magnitude;
                     }
                 }
             }
         }
 
-        // Apply forces to affected protons
+        // Process dark red wave hits and melting
+        for (i, was_hit) in hit_by_dark_red.iter().enumerate() {
+            if *was_hit {
+                if let Some(proton) = &mut self.protons[i] {
+                    if proton.is_alive() && proton.is_crystallized() {
+                        // Check if enough time has passed since last hit (prevent double-counting same wave)
+                        let time_since_last_hit = self.elapsed_time - proton.last_red_wave_hit_time();
+
+                        if time_since_last_hit >= pm::RED_WAVE_HIT_COOLDOWN {
+                            // Increment hit counter (unique wave)
+                            proton.increment_red_wave_hits();
+                            proton.set_last_red_wave_hit_time(self.elapsed_time);
+
+                            // Check if we've reached melting threshold
+                            if proton.red_wave_hits() >= pm::RED_WAVE_HITS_TO_MELT {
+                                // MELT: Break crystal bonds and decrystallize
+                                proton.set_crystallized(false);
+                                proton.clear_crystal_bonds();
+                                proton.reset_red_wave_hits();
+                                proton.set_freeze_cooldown(pm::H_CRYSTAL_FREEZE_COOLDOWN);
+
+                                // Add outward "melting" velocity
+                                if forces[i].length() > 0.01 {
+                                    let escape_dir = forces[i].normalize();
+                                    proton.add_velocity(escape_dir * 30.0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply repulsion forces to non-frozen protons
         for (i, force) in forces.iter().enumerate() {
             if force.length_squared() > 0.0001 {
                 if let Some(proton) = &mut self.protons[i] {
-                    if proton.is_alive() {
+                    if proton.is_alive() && !proton.is_crystallized() {
                         let acceleration = *force / proton.mass();
                         proton.add_velocity(acceleration * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Update H crystallization (gas/liquid/solid phase transitions)
+    /// Creates simple hexagons: 1 center + 6 sides arranged equidistantly
+    fn update_h_crystallization(&mut self, delta_time: f32) {
+        // Collect all H (neutral deuterium) protons
+        let mut h_protons: Vec<(usize, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 {
+                    h_protons.push((i, proton.position()));
+                }
+            }
+        }
+
+        // Build neighbor lists for each H (with minimum spacing filter)
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..h_protons.len() {
+            for j in (i + 1)..h_protons.len() {
+                let (idx1, pos1) = h_protons[i];
+                let (idx2, pos2) = h_protons[j];
+
+                let dist = pos1.distance(pos2);
+
+                // Only count as neighbors if within range AND not too close
+                if dist >= pm::H_CRYSTAL_MIN_SPACING && dist < pm::H_CRYSTAL_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        // Find clusters of exactly 7 H particles and assign center + 6 sides
+        let mut is_center: Vec<bool> = vec![false; self.protons.len()];
+        let mut center_bonds: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+
+        for (idx, pos) in &h_protons {
+            // Check if this proton is on freeze cooldown
+            let on_cooldown = if let Some(proton) = &self.protons[*idx] {
+                proton.freeze_cooldown() > 0.0
+            } else {
+                false
+            };
+
+            // Skip crystallization if on cooldown
+            if on_cooldown {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_crystallized(false);
+                    proton.clear_crystal_bonds();
+                }
+                continue;
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+
+            // Need exactly 6 or 7 neighbors to form a hexagon
+            if neighbors.len() >= 6 {
+                // Find 6 nearest neighbors
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            let dist = pos.distance(n_proton.position());
+                            Some((n_idx, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let six_nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(6)
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                // This particle becomes a center with 6 sides
+                is_center[*idx] = true;
+                center_bonds[*idx] = six_nearest.clone();
+
+                // Mark all as crystallized
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_crystallized(true);
+                    proton.set_crystal_bonds(six_nearest);
+                }
+            } else {
+                // Not enough neighbors - decrystallize
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_crystallized(false);
+                    proton.clear_crystal_bonds();
+                    proton.reset_red_wave_hits(); // Reset melt counter when decrystallizing
+                }
+            }
+        }
+
+        // Apply hexagonal arrangement forces
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+
+        for (idx, pos) in &h_protons {
+            if !is_center[*idx] {
+                continue; // Only centers apply forces
+            }
+
+            let side_indices = center_bonds[*idx].clone();
+            if side_indices.is_empty() {
+                continue;
+            }
+
+            // Calculate ideal hexagon positions around center
+            let ideal_angles: Vec<f32> = (0..6)
+                .map(|i| (i as f32) * std::f32::consts::PI / 3.0)
+                .collect();
+
+            // Apply forces to arrange sides in perfect hexagon
+            for (i, &side_idx) in side_indices.iter().enumerate() {
+                if let Some(side_proton) = &self.protons[side_idx] {
+                    let side_pos = side_proton.position();
+                    let delta = side_pos - *pos;
+                    let dist = delta.length();
+
+                    if dist > 0.1 && dist < pm::H_CRYSTAL_BREAKOFF_DISTANCE {
+                        // Force 1: Radial - maintain correct distance from center
+                        let radial_displacement = dist - pm::H_CRYSTAL_BOND_REST_LENGTH;
+                        let radial_force_mag = radial_displacement * pm::H_CRYSTAL_BOND_STRENGTH;
+                        let radial_dir = delta / dist;
+                        let radial_force = radial_dir * radial_force_mag;
+
+                        // Force 2: Angular - push to ideal angle position
+                        let current_angle = delta.y.atan2(delta.x);
+                        let ideal_angle = ideal_angles[i % 6];
+                        let angle_diff = ideal_angle - current_angle;
+
+                        // Perpendicular direction for angular force
+                        let perp_dir = vec2(-radial_dir.y, radial_dir.x);
+                        let angular_force = perp_dir * (angle_diff * pm::H_CRYSTAL_BOND_STRENGTH * 0.5);
+
+                        forces[side_idx] += radial_force + angular_force;
+                    }
+                }
+            }
+        }
+
+        // Collect non-frozen H positions for breakoff checking
+        let non_frozen_h: Vec<Vec2> = h_protons
+            .iter()
+            .filter_map(|(idx, pos)| {
+                if let Some(proton) = &self.protons[*idx] {
+                    if !proton.is_crystallized() {
+                        Some(*pos)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Check which side particles can break off (ignore frozen H when checking space)
+        let mut can_break_off: Vec<bool> = vec![false; self.protons.len()];
+        for (idx, pos) in &h_protons {
+            if is_center[*idx] {
+                continue; // Centers never break off
+            }
+
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_crystallized() {
+                    continue; // Only check crystallized sides
+                }
+
+                // Check if there's space around this side particle
+                // Only non-frozen H particles block the space
+                let mut has_space = false;
+                for angle in [0.0, std::f32::consts::PI / 2.0, std::f32::consts::PI, 3.0 * std::f32::consts::PI / 2.0] {
+                    let dir = vec2(angle.cos(), angle.sin());
+                    let test_pos = *pos + dir * pm::H_CRYSTAL_VIBRATION_THRESHOLD;
+
+                    let mut space_clear = true;
+                    for other_pos in &non_frozen_h {
+                        if test_pos.distance(*other_pos) < pm::H_CRYSTAL_NEIGHBOR_DISTANCE {
+                            space_clear = false;
+                            break;
+                        }
+                    }
+
+                    if space_clear {
+                        has_space = true;
+                        break;
+                    }
+                }
+
+                can_break_off[*idx] = has_space;
+            }
+        }
+
+        // Apply forces and freeze when in position
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_crystallized() {
+                    if is_center[i] {
+                        // Center: FREEZE completely
+                        proton.set_velocity(Vec2::ZERO);
+                    } else {
+                        // Sides: check if can break off
+                        if can_break_off[i] {
+                            // Has space to evaporate - decrystallize and release
+                            proton.set_crystallized(false);
+                            proton.clear_crystal_bonds();
+                            proton.reset_red_wave_hits(); // Reset melt counter on sublimation
+                            // Add small outward velocity
+                            if force.length() > 0.01 {
+                                let escape_dir = force.normalize();
+                                proton.set_velocity(escape_dir * 20.0);
+                            }
+                        } else {
+                            // No space or still arranging - apply forces or freeze
+                            let force_magnitude = force.length();
+
+                            if force_magnitude > 0.0001 {
+                                // Still arranging
+                                let acceleration = *force / proton.mass();
+                                proton.add_velocity(acceleration * delta_time);
+                            } else {
+                                // Settled - freeze in position
+                                proton.set_velocity(Vec2::ZERO);
+                            }
+                        }
                     }
                 }
             }
