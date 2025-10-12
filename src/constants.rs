@@ -109,6 +109,26 @@ pub mod proton {
     pub const SULFUR32_COLOR: (u8, u8, u8) = (220, 220, 80);
     pub const SULFUR32_RADIUS_MULTIPLIER: f32 = 3.4;
     pub const SULFUR32_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.72;
+
+    // Hydrogen Sulfide (H2S) - S32 + 2H
+    pub const H2S_COLOR: (u8, u8, u8) = (200, 220, 80);  // Yellow-green
+    pub const H2S_RADIUS_MULTIPLIER: f32 = 3.2;
+    pub const H2S_CAPTURE_RANGE: f32 = 45.0;
+
+    // Magnesium Hydride (MgH2) - Mg24 + 2H
+    pub const MGH2_COLOR: (u8, u8, u8) = (180, 180, 190);  // Gray-metallic
+    pub const MGH2_RADIUS_MULTIPLIER: f32 = 2.8;
+    pub const MGH2_CAPTURE_RANGE: f32 = 45.0;
+
+    // Methane (CH4) - C12 + 4H
+    pub const CH4_COLOR: (u8, u8, u8) = (120, 200, 150);  // Pale blue-green
+    pub const CH4_RADIUS_MULTIPLIER: f32 = 2.9;
+    pub const CH4_CAPTURE_RANGE: f32 = 50.0;
+
+    // Silane (SiH4) - Si28 + 4H
+    pub const SIH4_COLOR: (u8, u8, u8) = (220, 100, 50);  // Orange-red
+    pub const SIH4_RADIUS_MULTIPLIER: f32 = 3.1;
+    pub const SIH4_CAPTURE_RANGE: f32 = 50.0;
 }
 
 // ===== PROTON MANAGER PHYSICS =====

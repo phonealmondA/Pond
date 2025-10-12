@@ -32,6 +32,7 @@ async fn main() {
     let mut frame_count = 0;
     let mut fps_timer = 0.0;
     let mut fps = 0.0;
+    let mut paused = false;
 
     loop {
         let delta_time = get_frame_time();
@@ -46,10 +47,12 @@ async fn main() {
             frame_count = 0;
         }
 
-        // Update systems
-        ring_manager.update(delta_time, window_size);
-        atom_manager.update(delta_time, ring_manager.get_all_rings(), window_size);
-        proton_manager.update(delta_time, window_size, &mut atom_manager, &mut ring_manager);
+        // Update systems (only if not paused)
+        if !paused {
+            ring_manager.update(delta_time, window_size);
+            atom_manager.update(delta_time, ring_manager.get_all_rings(), window_size);
+            proton_manager.update(delta_time, window_size, &mut atom_manager, &mut ring_manager);
+        }
 
         // Render
         clear_background(BLACK);
@@ -66,25 +69,46 @@ async fn main() {
         draw_text(&format!("Atoms: {}", atom_manager.get_atom_count()), 10.0, 90.0, 30.0, GREEN);
         draw_text(&format!("Protons: {}", proton_manager.get_proton_count()), 10.0, 120.0, 30.0, GREEN);
         draw_text("RustPond v0.2", 10.0, 150.0, 20.0, GRAY);
-        draw_text("Click: Spawn Ring | C: Cycle Color | Space: Clear All | H: Delete H | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
+        draw_text("Click: Spawn Ring | C: Cycle Color | Space: Clear All | H: Delete H | P: Pause | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
 
         // Show current ring color
         let color_info = ring_manager.get_current_frequency_info();
         draw_text(&color_info, 10.0, 210.0, 18.0, LIGHTGRAY);
+
+        // Show PAUSED indicator
+        if paused {
+            let pause_text = "PAUSED";
+            let pause_font_size = 60.0;
+            let text_dims = measure_text(pause_text, None, pause_font_size as u16, 1.0);
+            let pause_x = (window_size.0 - text_dims.width) / 2.0;
+            let pause_y = window_size.1 / 2.0;
+
+            // Draw with red outline
+            draw_text(pause_text, pause_x + 2.0, pause_y + 2.0, pause_font_size, BLACK);
+            draw_text(pause_text, pause_x - 2.0, pause_y - 2.0, pause_font_size, BLACK);
+            draw_text(pause_text, pause_x + 2.0, pause_y - 2.0, pause_font_size, BLACK);
+            draw_text(pause_text, pause_x - 2.0, pause_y + 2.0, pause_font_size, BLACK);
+            draw_text(pause_text, pause_x, pause_y, pause_font_size, RED);
+        }
 
         // Input handling
         if is_key_pressed(KeyCode::Escape) {
             break;
         }
 
-        // Spawn ring on click
-        if is_mouse_button_pressed(MouseButton::Left) {
+        // Toggle pause with P key
+        if is_key_pressed(KeyCode::P) {
+            paused = !paused;
+        }
+
+        // Spawn ring on click (only when not paused)
+        if !paused && is_mouse_button_pressed(MouseButton::Left) {
             let mouse_pos = mouse_position();
             ring_manager.add_ring(vec2(mouse_pos.0, mouse_pos.1));
         }
 
-        // Cycle color with C key
-        if is_key_pressed(KeyCode::C) {
+        // Cycle color with C key (only when not paused)
+        if !paused && is_key_pressed(KeyCode::C) {
             ring_manager.cycle_to_next_color();
         }
 

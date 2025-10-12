@@ -127,7 +127,7 @@ impl ProtonManager {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
                 if !proton.is_alive() || proton.is_marked_for_deletion() {
-                    // Never remove stable particles: H1, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, or S32
+                    // Never remove stable particles: H1, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, S32, and hydrogen compounds
                     if !proton.is_stable_hydrogen()
                         && !proton.is_stable_helium4()
                         && !proton.is_stable_carbon12()
@@ -136,7 +136,11 @@ impl ProtonManager {
                         && !proton.is_neon20()
                         && !proton.is_magnesium24()
                         && !proton.is_silicon28()
-                        && !proton.is_sulfur32() {
+                        && !proton.is_sulfur32()
+                        && !proton.is_h2s()
+                        && !proton.is_mgh2()
+                        && !proton.is_ch4()
+                        && !proton.is_sih4() {
                         *proton_opt = None;
                     }
                 }
@@ -246,7 +250,7 @@ impl ProtonManager {
     pub fn clear(&mut self) {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
-                // Preserve stable H1, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, and S32
+                // Preserve stable H1, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, S32, and hydrogen compounds
                 if !proton.is_stable_hydrogen()
                     && !proton.is_stable_helium4()
                     && !proton.is_stable_carbon12()
@@ -255,7 +259,11 @@ impl ProtonManager {
                     && !proton.is_neon20()
                     && !proton.is_magnesium24()
                     && !proton.is_silicon28()
-                    && !proton.is_sulfur32() {
+                    && !proton.is_sulfur32()
+                    && !proton.is_h2s()
+                    && !proton.is_mgh2()
+                    && !proton.is_ch4()
+                    && !proton.is_sih4() {
                     *proton_opt = None;
                 }
             }
@@ -275,7 +283,7 @@ impl ProtonManager {
         }
     }
 
-    /// Get proton count (excluding stable hydrogen, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, and S32)
+    /// Get proton count (excluding stable hydrogen, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, S32, and hydrogen compounds)
     pub fn get_proton_count(&self) -> usize {
         self.protons
             .iter()
@@ -291,6 +299,10 @@ impl ProtonManager {
                         && !proton.is_magnesium24()
                         && !proton.is_silicon28()
                         && !proton.is_sulfur32()
+                        && !proton.is_h2s()
+                        && !proton.is_mgh2()
+                        && !proton.is_ch4()
+                        && !proton.is_sih4()
                 } else {
                     false
                 }
@@ -888,9 +900,9 @@ impl ProtonManager {
         }
     }
 
-    /// Handle solid collisions between H, He4, C12, O16 bonded particles, and H2O protons
+    /// Handle solid collisions between H, He4, C12, O16 bonded particles, H2O, and hydrogen compound molecules
     fn handle_solid_collisions(&mut self) {
-        // Collect solid proton data (H, He4, C12, O16 bonded, and H2O)
+        // Collect solid proton data (H, He4, C12, O16 bonded, H2O, and hydrogen compounds)
         let mut solid_protons: Vec<(usize, Vec2, Vec2, f32, f32)> = Vec::new();
 
         for (i, proton_opt) in self.protons.iter().enumerate() {
@@ -898,6 +910,51 @@ impl ProtonManager {
                 if proton.is_alive() {
                     let charge = proton.charge();
                     let neutron_count = proton.neutron_count();
+
+                    // Hydrogen compound molecules are solid
+                    if proton.is_sih4() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    if proton.is_ch4() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    if proton.is_h2s() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    if proton.is_mgh2() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
 
                     // S32 particles are solid
                     if proton.is_sulfur32() {
@@ -1874,6 +1931,358 @@ impl ProtonManager {
                 return;
             }
         }
+
+        // H2S FORMATION: S32 + 2 H atoms → H2S molecule
+        // Collect all S32 particles
+        let mut s32_particles: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_sulfur32() {
+                    s32_particles.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Collect all available H atoms (not crystallized)
+        let mut h_atoms: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 && !proton.is_crystallized() {
+                    h_atoms.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Check each S32 for nearby H atoms
+        for (s32_idx, s32_pos, s32_mass, s32_energy, s32_vel) in s32_particles {
+            // Find two H atoms near the S32
+            let mut nearby_h: Vec<(usize, f32, f32, f32, Vec2)> = Vec::new();
+            for (h_idx, h_pos, h_mass, h_energy, h_vel) in &h_atoms {
+                let dist = s32_pos.distance(*h_pos);
+                if dist < proton::H2S_CAPTURE_RANGE {
+                    nearby_h.push((*h_idx, *h_mass, *h_energy, dist, *h_vel));
+                }
+            }
+
+            // Need at least 2 H atoms
+            if nearby_h.len() >= 2 {
+                // Sort by distance and take the two closest
+                nearby_h.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                let h1_idx = nearby_h[0].0;
+                let h1_mass = nearby_h[0].1;
+                let h1_energy = nearby_h[0].2;
+                let h1_vel = nearby_h[0].4;
+
+                let h2_idx = nearby_h[1].0;
+                let h2_mass = nearby_h[1].1;
+                let h2_energy = nearby_h[1].2;
+                let h2_vel = nearby_h[1].4;
+
+                // H2S FORMATION OCCURS!
+                let total_mass = s32_mass + h1_mass + h2_mass;
+                let combined_momentum = s32_vel * s32_mass + h1_vel * h1_mass + h2_vel * h2_mass;
+                let combined_vel = combined_momentum / total_mass;
+                let combined_energy = s32_energy + h1_energy + h2_energy;
+                let center_of_mass = (s32_pos * s32_mass + {
+                    let h1p = self.protons[h1_idx].as_ref().unwrap().position();
+                    let h2p = self.protons[h2_idx].as_ref().unwrap().position();
+                    h1p * h1_mass + h2p * h2_mass
+                }) / total_mass;
+
+                // Create H2S molecule
+                let mut h2s = Proton::new(
+                    center_of_mass,
+                    combined_vel,
+                    Color::from_rgba(200, 220, 80, 255),
+                    combined_energy,
+                    18, // S32 has 16 protons + 2 from H = 18
+                );
+                h2s.set_neutron_count(18); // S32 has 16 neutrons + 2 from H = 18
+                h2s.set_max_lifetime(-1.0); // H2S is stable
+                h2s.set_h2s(true);
+                self.protons[s32_idx] = Some(h2s);
+
+                // Delete the H atoms
+                self.protons[h1_idx] = None;
+                self.protons[h2_idx] = None;
+
+                // Spawn energy wave
+                use macroquad::rand::gen_range;
+                let t: f32 = gen_range(0.0, 1.0);
+                let t = t.powf(3.0);
+                ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                return;
+            }
+        }
+
+        // MGH2 FORMATION: Mg24 + 2 H atoms → MgH2 molecule
+        // Collect all Mg24 particles
+        let mut mg24_particles: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_magnesium24() {
+                    mg24_particles.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Reuse h_atoms from above
+        let mut h_atoms: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 && !proton.is_crystallized() {
+                    h_atoms.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Check each Mg24 for nearby H atoms
+        for (mg24_idx, mg24_pos, mg24_mass, mg24_energy, mg24_vel) in mg24_particles {
+            let mut nearby_h: Vec<(usize, f32, f32, f32, Vec2)> = Vec::new();
+            for (h_idx, h_pos, h_mass, h_energy, h_vel) in &h_atoms {
+                let dist = mg24_pos.distance(*h_pos);
+                if dist < proton::MGH2_CAPTURE_RANGE {
+                    nearby_h.push((*h_idx, *h_mass, *h_energy, dist, *h_vel));
+                }
+            }
+
+            if nearby_h.len() >= 2 {
+                nearby_h.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                let h1_idx = nearby_h[0].0;
+                let h1_mass = nearby_h[0].1;
+                let h1_energy = nearby_h[0].2;
+                let h1_vel = nearby_h[0].4;
+
+                let h2_idx = nearby_h[1].0;
+                let h2_mass = nearby_h[1].1;
+                let h2_energy = nearby_h[1].2;
+                let h2_vel = nearby_h[1].4;
+
+                // MgH2 FORMATION OCCURS!
+                let total_mass = mg24_mass + h1_mass + h2_mass;
+                let combined_momentum = mg24_vel * mg24_mass + h1_vel * h1_mass + h2_vel * h2_mass;
+                let combined_vel = combined_momentum / total_mass;
+                let combined_energy = mg24_energy + h1_energy + h2_energy;
+                let center_of_mass = (mg24_pos * mg24_mass + {
+                    let h1p = self.protons[h1_idx].as_ref().unwrap().position();
+                    let h2p = self.protons[h2_idx].as_ref().unwrap().position();
+                    h1p * h1_mass + h2p * h2_mass
+                }) / total_mass;
+
+                let mut mgh2 = Proton::new(
+                    center_of_mass,
+                    combined_vel,
+                    Color::from_rgba(180, 180, 190, 255),
+                    combined_energy,
+                    14, // Mg24 has 12 protons + 2 from H = 14
+                );
+                mgh2.set_neutron_count(14); // Mg24 has 12 neutrons + 2 from H = 14
+                mgh2.set_max_lifetime(-1.0);
+                mgh2.set_mgh2(true);
+                self.protons[mg24_idx] = Some(mgh2);
+
+                self.protons[h1_idx] = None;
+                self.protons[h2_idx] = None;
+
+                use macroquad::rand::gen_range;
+                let t: f32 = gen_range(0.0, 1.0);
+                let t = t.powf(3.0);
+                ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                return;
+            }
+        }
+
+        // CH4 FORMATION: C12 + 4 H atoms → CH4 molecule
+        // Collect all C12 particles (not bonded)
+        let mut c12_particles: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_stable_carbon12() && !proton.is_oxygen16_bonded() {
+                    c12_particles.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Reuse h_atoms
+        let mut h_atoms: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 && !proton.is_crystallized() {
+                    h_atoms.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Check each C12 for nearby H atoms
+        for (c12_idx, c12_pos, c12_mass, c12_energy, c12_vel) in c12_particles {
+            let mut nearby_h: Vec<(usize, f32, f32, f32, Vec2)> = Vec::new();
+            for (h_idx, h_pos, h_mass, h_energy, h_vel) in &h_atoms {
+                let dist = c12_pos.distance(*h_pos);
+                if dist < proton::CH4_CAPTURE_RANGE {
+                    nearby_h.push((*h_idx, *h_mass, *h_energy, dist, *h_vel));
+                }
+            }
+
+            // Need at least 4 H atoms for methane
+            if nearby_h.len() >= 4 {
+                nearby_h.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                let h1_idx = nearby_h[0].0;
+                let h2_idx = nearby_h[1].0;
+                let h3_idx = nearby_h[2].0;
+                let h4_idx = nearby_h[3].0;
+
+                // CH4 FORMATION OCCURS!
+                let h1_mass = nearby_h[0].1;
+                let h2_mass = nearby_h[1].1;
+                let h3_mass = nearby_h[2].1;
+                let h4_mass = nearby_h[3].1;
+
+                let h1_energy = nearby_h[0].2;
+                let h2_energy = nearby_h[1].2;
+                let h3_energy = nearby_h[2].2;
+                let h4_energy = nearby_h[3].2;
+
+                let h1_vel = nearby_h[0].4;
+                let h2_vel = nearby_h[1].4;
+                let h3_vel = nearby_h[2].4;
+                let h4_vel = nearby_h[3].4;
+
+                let total_mass = c12_mass + h1_mass + h2_mass + h3_mass + h4_mass;
+                let combined_momentum = c12_vel * c12_mass + h1_vel * h1_mass + h2_vel * h2_mass + h3_vel * h3_mass + h4_vel * h4_mass;
+                let combined_vel = combined_momentum / total_mass;
+                let combined_energy = c12_energy + h1_energy + h2_energy + h3_energy + h4_energy;
+
+                let h_positions_mass = {
+                    let h1p = self.protons[h1_idx].as_ref().unwrap().position();
+                    let h2p = self.protons[h2_idx].as_ref().unwrap().position();
+                    let h3p = self.protons[h3_idx].as_ref().unwrap().position();
+                    let h4p = self.protons[h4_idx].as_ref().unwrap().position();
+                    h1p * h1_mass + h2p * h2_mass + h3p * h3_mass + h4p * h4_mass
+                };
+                let center_of_mass = (c12_pos * c12_mass + h_positions_mass) / total_mass;
+
+                let mut ch4 = Proton::new(
+                    center_of_mass,
+                    combined_vel,
+                    Color::from_rgba(120, 200, 150, 255),
+                    combined_energy,
+                    10, // C12 has 6 protons + 4 from H = 10
+                );
+                ch4.set_neutron_count(10); // C12 has 6 neutrons + 4 from H = 10
+                ch4.set_max_lifetime(-1.0);
+                ch4.set_ch4(true);
+                self.protons[c12_idx] = Some(ch4);
+
+                self.protons[h1_idx] = None;
+                self.protons[h2_idx] = None;
+                self.protons[h3_idx] = None;
+                self.protons[h4_idx] = None;
+
+                use macroquad::rand::gen_range;
+                let t: f32 = gen_range(0.0, 1.0);
+                let t = t.powf(3.0);
+                ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                return;
+            }
+        }
+
+        // SIH4 FORMATION: Si28 + 4 H atoms → SiH4 molecule
+        // Collect all Si28 particles
+        let mut si28_particles: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_silicon28() {
+                    si28_particles.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Reuse h_atoms
+        let mut h_atoms: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 && !proton.is_crystallized() {
+                    h_atoms.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Check each Si28 for nearby H atoms
+        for (si28_idx, si28_pos, si28_mass, si28_energy, si28_vel) in si28_particles {
+            let mut nearby_h: Vec<(usize, f32, f32, f32, Vec2)> = Vec::new();
+            for (h_idx, h_pos, h_mass, h_energy, h_vel) in &h_atoms {
+                let dist = si28_pos.distance(*h_pos);
+                if dist < proton::SIH4_CAPTURE_RANGE {
+                    nearby_h.push((*h_idx, *h_mass, *h_energy, dist, *h_vel));
+                }
+            }
+
+            // Need at least 4 H atoms for silane
+            if nearby_h.len() >= 4 {
+                nearby_h.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                let h1_idx = nearby_h[0].0;
+                let h2_idx = nearby_h[1].0;
+                let h3_idx = nearby_h[2].0;
+                let h4_idx = nearby_h[3].0;
+
+                // SiH4 FORMATION OCCURS!
+                let h1_mass = nearby_h[0].1;
+                let h2_mass = nearby_h[1].1;
+                let h3_mass = nearby_h[2].1;
+                let h4_mass = nearby_h[3].1;
+
+                let h1_energy = nearby_h[0].2;
+                let h2_energy = nearby_h[1].2;
+                let h3_energy = nearby_h[2].2;
+                let h4_energy = nearby_h[3].2;
+
+                let h1_vel = nearby_h[0].4;
+                let h2_vel = nearby_h[1].4;
+                let h3_vel = nearby_h[2].4;
+                let h4_vel = nearby_h[3].4;
+
+                let total_mass = si28_mass + h1_mass + h2_mass + h3_mass + h4_mass;
+                let combined_momentum = si28_vel * si28_mass + h1_vel * h1_mass + h2_vel * h2_mass + h3_vel * h3_mass + h4_vel * h4_mass;
+                let combined_vel = combined_momentum / total_mass;
+                let combined_energy = si28_energy + h1_energy + h2_energy + h3_energy + h4_energy;
+
+                let h_positions_mass = {
+                    let h1p = self.protons[h1_idx].as_ref().unwrap().position();
+                    let h2p = self.protons[h2_idx].as_ref().unwrap().position();
+                    let h3p = self.protons[h3_idx].as_ref().unwrap().position();
+                    let h4p = self.protons[h4_idx].as_ref().unwrap().position();
+                    h1p * h1_mass + h2p * h2_mass + h3p * h3_mass + h4p * h4_mass
+                };
+                let center_of_mass = (si28_pos * si28_mass + h_positions_mass) / total_mass;
+
+                let mut sih4 = Proton::new(
+                    center_of_mass,
+                    combined_vel,
+                    Color::from_rgba(220, 100, 50, 255),
+                    combined_energy,
+                    18, // Si28 has 14 protons + 4 from H = 18
+                );
+                sih4.set_neutron_count(18); // Si28 has 14 neutrons + 4 from H = 18
+                sih4.set_max_lifetime(-1.0);
+                sih4.set_sih4(true);
+                self.protons[si28_idx] = Some(sih4);
+
+                self.protons[h1_idx] = None;
+                self.protons[h2_idx] = None;
+                self.protons[h3_idx] = None;
+                self.protons[h4_idx] = None;
+
+                use macroquad::rand::gen_range;
+                let t: f32 = gen_range(0.0, 1.0);
+                let t = t.powf(3.0);
+                ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                return;
+            }
+        }
     }
 
     /// Detect atom collisions and spawn protons
@@ -1958,11 +2367,12 @@ impl ProtonManager {
                         // Proton color (white for now)
                         let proton_color = WHITE;
 
-                        // Determine charge based on combined energy
-                        let charge = if combined_energy >= pm::NEGATIVE_PROTON_ENERGY_THRESHOLD {
-                            -1
+                        // Determine charge randomly (50/50 chance for H+ or H-)
+                        use macroquad::rand::gen_range;
+                        let charge = if gen_range(0.0, 1.0) < 0.5 {
+                            1  // H+
                         } else {
-                            1
+                            -1  // H-
                         };
 
                         // Spawn the proton

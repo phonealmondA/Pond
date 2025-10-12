@@ -58,6 +58,12 @@ pub struct Proton {
 
     // Sulfur-32 flag
     is_sulfur32: bool,
+
+    // Hydrogen compound molecule flags
+    is_h2s: bool,      // Hydrogen Sulfide (S32 + 2H)
+    is_mgh2: bool,     // Magnesium Hydride (Mg24 + 2H)
+    is_ch4: bool,      // Methane (C12 + 4H)
+    is_sih4: bool,     // Silane (Si28 + 4H)
 }
 
 impl Proton {
@@ -99,6 +105,10 @@ impl Proton {
             is_magnesium24: false,
             is_silicon28: false,
             is_sulfur32: false,
+            is_h2s: false,
+            is_mgh2: false,
+            is_ch4: false,
+            is_sih4: false,
         }
     }
 
@@ -234,7 +244,20 @@ impl Proton {
 
     pub fn get_element_label(&self) -> String {
         // Check molecular flags first (take precedence)
-        if self.is_sulfur32 {
+        // Hydrogen compounds first
+        if self.is_sih4 {
+            "SiH4".to_string()
+        } else if self.is_ch4 {
+            "CH4".to_string()
+        } else if self.is_h2s {
+            "H2S".to_string()
+        } else if self.is_mgh2 {
+            "MgH2".to_string()
+        } else if self.is_h2o {
+            "H2O".to_string()
+        }
+        // Then alpha ladder elements
+        else if self.is_sulfur32 {
             "S32".to_string()
         } else if self.is_silicon28 {
             "Si28".to_string()
@@ -242,8 +265,6 @@ impl Proton {
             "Mg24".to_string()
         } else if self.is_neon20 {
             "Ne20".to_string()
-        } else if self.is_h2o {
-            "H2O".to_string()
         } else if self.is_oxygen16_bonded {
             "O16".to_string()
         } else if self.charge == 6 && self.neutron_count == 6 {
@@ -287,30 +308,43 @@ impl Proton {
             render_color.b = b;
         }
 
-        // Sulfur-32 - check first
-        if self.is_sulfur32 {
+        // Hydrogen compound molecules - check first (higher priority)
+        if self.is_sih4 {
+            render_color = Color::from_rgba(220, 100, 50, 255);
+            render_radius *= pc::SIH4_RADIUS_MULTIPLIER;
+        }
+        else if self.is_ch4 {
+            render_color = Color::from_rgba(120, 200, 150, 255);
+            render_radius *= pc::CH4_RADIUS_MULTIPLIER;
+        }
+        else if self.is_h2s {
+            render_color = Color::from_rgba(200, 220, 80, 255);
+            render_radius *= pc::H2S_RADIUS_MULTIPLIER;
+        }
+        else if self.is_mgh2 {
+            render_color = Color::from_rgba(180, 180, 190, 255);
+            render_radius *= pc::MGH2_RADIUS_MULTIPLIER;
+        }
+        else if self.is_h2o {
+            render_color = Color::from_rgba(40, 100, 180, 255);
+            render_radius *= pc::WATER_RADIUS_MULTIPLIER;
+        }
+        // Alpha ladder elements
+        else if self.is_sulfur32 {
             render_color = Color::from_rgba(220, 220, 80, 255);
             render_radius *= pc::SULFUR32_RADIUS_MULTIPLIER;
         }
-        // Silicon-28 - check second
         else if self.is_silicon28 {
             render_color = Color::from_rgba(160, 130, 90, 255);
             render_radius *= pc::SILICON28_RADIUS_MULTIPLIER;
         }
-        // Magnesium-24 - check third
         else if self.is_magnesium24 {
             render_color = Color::from_rgba(200, 200, 220, 255);
             render_radius *= pc::MAGNESIUM24_RADIUS_MULTIPLIER;
         }
-        // Neon-20 - check fourth
         else if self.is_neon20 {
             render_color = Color::from_rgba(255, 100, 150, 255);
             render_radius *= pc::NEON20_RADIUS_MULTIPLIER;
-        }
-        // Water molecule (H2O) - check fifth
-        else if self.is_h2o {
-            render_color = Color::from_rgba(40, 100, 180, 255);
-            render_radius *= pc::WATER_RADIUS_MULTIPLIER;
         }
         // Oxygen-16 bonded pair - check third as it overrides base element colors
         else if self.is_oxygen16_bonded {
@@ -452,4 +486,17 @@ impl Proton {
     // Sulfur-32 getters/setters
     pub fn is_sulfur32(&self) -> bool { self.is_sulfur32 }
     pub fn set_sulfur32(&mut self, is_s: bool) { self.is_sulfur32 = is_s; }
+
+    // Hydrogen compound molecule getters/setters
+    pub fn is_h2s(&self) -> bool { self.is_h2s }
+    pub fn set_h2s(&mut self, is_h2s: bool) { self.is_h2s = is_h2s; }
+
+    pub fn is_mgh2(&self) -> bool { self.is_mgh2 }
+    pub fn set_mgh2(&mut self, is_mgh2: bool) { self.is_mgh2 = is_mgh2; }
+
+    pub fn is_ch4(&self) -> bool { self.is_ch4 }
+    pub fn set_ch4(&mut self, is_ch4: bool) { self.is_ch4 = is_ch4; }
+
+    pub fn is_sih4(&self) -> bool { self.is_sih4 }
+    pub fn set_sih4(&mut self, is_sih4: bool) { self.is_sih4 = is_sih4; }
 }
