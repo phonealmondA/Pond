@@ -283,6 +283,13 @@ impl ProtonManager {
         }
     }
 
+    /// Clear ALL protons including stable/immortal elements
+    pub fn clear_all(&mut self) {
+        for proton_opt in &mut self.protons {
+            *proton_opt = None;
+        }
+    }
+
     /// Get proton count (excluding stable hydrogen, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, S32, and hydrogen compounds)
     pub fn get_proton_count(&self) -> usize {
         self.protons
@@ -2420,5 +2427,128 @@ impl ProtonManager {
 
         // Remove expired cooldowns
         self.spawn_cooldowns.retain(|cooldown| cooldown.1 > 0.0);
+    }
+
+    /// Get counts of discovered stable elements
+    pub fn get_element_counts(&self) -> std::collections::HashMap<String, usize> {
+        let mut counts = std::collections::HashMap::new();
+
+        for proton_opt in &self.protons {
+            if let Some(proton) = proton_opt {
+                if !proton.is_alive() {
+                    continue;
+                }
+
+                // Only track simple stable elements, not compounds
+                let element = if proton.is_stable_hydrogen() {
+                    Some("H1")
+                } else if proton.charge() == 1 && proton.neutron_count() == 2 {
+                    Some("He3")
+                } else if proton.charge() == 2 && proton.neutron_count() == 2 {
+                    Some("He4")
+                } else if proton.charge() == 6 && proton.neutron_count() == 6 {
+                    Some("C12")
+                } else if proton.is_neon20() {
+                    Some("Ne20")
+                } else if proton.is_magnesium24() {
+                    Some("Mg24")
+                } else if proton.is_silicon28() {
+                    Some("Si28")
+                } else if proton.is_sulfur32() {
+                    Some("S32")
+                } else {
+                    None
+                };
+
+                if let Some(elem) = element {
+                    *counts.entry(elem.to_string()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        counts
+    }
+
+    /// Spawn a specific element type at a position with velocity
+    pub fn spawn_element(&mut self, element_type: &str, position: Vec2, velocity: Vec2) {
+        use crate::constants::proton as pc;
+
+        // Check if at capacity
+        if self.get_proton_count() >= self.max_protons {
+            return;
+        }
+
+        // Find first empty slot
+        for i in 0..self.protons.len() {
+            if self.protons[i].is_none() || !self.protons[i].as_ref().unwrap().is_alive() {
+                let proton = match element_type {
+                    "H1" => {
+                        // Stable hydrogen
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(255, 255, 255, 255), 1.0, 0);
+                        p.set_neutron_count(1);
+                        p.set_stable_hydrogen(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "He3" => {
+                        // Helium-3 (charge 1, neutron 2)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(255, 200, 100, 255), 3.0, 1);
+                        p.set_neutron_count(2);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "He4" => {
+                        // Helium-4 (charge 2, neutron 2)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(255, 255, 100, 255), 4.0, 2);
+                        p.set_neutron_count(2);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "C12" => {
+                        // Carbon-12 (charge 6, neutron 6)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(100, 100, 100, 255), 12.0, 6);
+                        p.set_neutron_count(6);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "Ne20" => {
+                        // Neon-20 (charge 10, neutron 10)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(255, 100, 150, 255), 20.0, 10);
+                        p.set_neutron_count(10);
+                        p.set_neon20(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "Mg24" => {
+                        // Magnesium-24 (charge 12, neutron 12)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(200, 200, 220, 255), 24.0, 12);
+                        p.set_neutron_count(12);
+                        p.set_magnesium24(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "Si28" => {
+                        // Silicon-28 (charge 14, neutron 14)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(160, 130, 90, 255), 28.0, 14);
+                        p.set_neutron_count(14);
+                        p.set_silicon28(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "S32" => {
+                        // Sulfur-32 (charge 16, neutron 16)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(220, 220, 80, 255), 32.0, 16);
+                        p.set_neutron_count(16);
+                        p.set_sulfur32(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    _ => return, // Unknown element type
+                };
+
+                self.protons[i] = Some(proton);
+                break;
+            }
+        }
     }
 }

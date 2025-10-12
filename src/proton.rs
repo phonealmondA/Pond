@@ -414,6 +414,7 @@ impl Proton {
     pub fn charge(&self) -> i32 { self.charge }
     pub fn neutron_count(&self) -> i32 { self.neutron_count }
     pub fn is_stable_hydrogen(&self) -> bool { self.is_stable_hydrogen }
+    pub fn set_stable_hydrogen(&mut self, stable: bool) { self.is_stable_hydrogen = stable; }
     pub fn is_stable_helium4(&self) -> bool { self.charge == 2 && self.neutron_count == 2 }
     pub fn is_stable_carbon12(&self) -> bool { self.charge == 6 && self.neutron_count == 6 }
     pub fn is_sleeping(&self) -> bool { self.is_sleeping }
