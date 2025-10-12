@@ -38,6 +38,14 @@ pub struct Proton {
     red_wave_hits: u8, // Count of dark red wave hits (for melting)
     freeze_cooldown: f32, // Time before can crystallize again after melting
     last_red_wave_hit_time: f32, // Tracks time of last hit to prevent double-counting
+
+    // Oxygen-16 bonding system (C12 + He4 molecular bond)
+    is_oxygen16_bonded: bool,
+    oxygen_bond_partner: Option<usize>, // Index of bonded partner particle
+    oxygen_bond_rest_length: f32, // Rest length of O16 bond
+
+    // Water molecule flag
+    is_h2o: bool,
 }
 
 impl Proton {
@@ -71,6 +79,10 @@ impl Proton {
             red_wave_hits: 0,
             freeze_cooldown: 0.0,
             last_red_wave_hit_time: -999.0,
+            is_oxygen16_bonded: false,
+            oxygen_bond_partner: None,
+            oxygen_bond_rest_length: 0.0,
+            is_h2o: false,
         }
     }
 
@@ -96,7 +108,7 @@ impl Proton {
         }
 
         // SLEEPING OPTIMIZATION
-        if self.is_stable_hydrogen || self.is_stable_helium4() {
+        if self.is_stable_hydrogen || self.is_stable_helium4() || self.is_stable_carbon12() {
             let velocity_magnitude = self.velocity.length();
 
             if velocity_magnitude < 1.0 {
@@ -132,7 +144,7 @@ impl Proton {
         const CULL_MARGIN: f32 = 200.0;
         if self.position.x < -CULL_MARGIN || self.position.x > window_size.0 + CULL_MARGIN ||
            self.position.y < -CULL_MARGIN || self.position.y > window_size.1 + CULL_MARGIN {
-            if !self.is_stable_hydrogen && self.charge != 2 {
+            if !self.is_stable_hydrogen && !self.is_stable_helium4() && !self.is_stable_carbon12() {
                 self.is_alive = false;
             }
         }
@@ -205,7 +217,14 @@ impl Proton {
     }
 
     pub fn get_element_label(&self) -> String {
-        if self.charge == 2 && self.neutron_count == 2 {
+        // Check molecular flags first (take precedence)
+        if self.is_h2o {
+            "H2O".to_string()
+        } else if self.is_oxygen16_bonded {
+            "O16".to_string()
+        } else if self.charge == 6 && self.neutron_count == 6 {
+            "C12".to_string()
+        } else if self.charge == 2 && self.neutron_count == 2 {
             "He4".to_string()
         } else if self.charge == 1 && self.neutron_count == 2 {
             "He3".to_string()
@@ -244,8 +263,23 @@ impl Proton {
             render_color.b = b;
         }
 
+        // Water molecule (H2O) - check first as it takes precedence
+        if self.is_h2o {
+            render_color = Color::from_rgba(40, 100, 180, 255);
+            render_radius *= pc::WATER_RADIUS_MULTIPLIER;
+        }
+        // Oxygen-16 bonded pair - check second as it overrides base element colors
+        else if self.is_oxygen16_bonded {
+            render_color = Color::from_rgba(100, 180, 255, 255);
+            // Keep original radius for bonded particles
+        }
+        // Carbon-12
+        else if self.charge == 6 && self.neutron_count == 6 {
+            render_color = Color::from_rgba(100, 100, 100, 255);
+            render_radius *= pc::CARBON12_RADIUS_MULTIPLIER;
+        }
         // Helium-3
-        if self.charge == 1 && self.neutron_count == 2 {
+        else if self.charge == 1 && self.neutron_count == 2 {
             render_color = Color::from_rgba(255, 200, 100, 255);
             render_radius *= pc::HELIUM3_RADIUS_MULTIPLIER;
         }
@@ -303,6 +337,7 @@ impl Proton {
     pub fn neutron_count(&self) -> i32 { self.neutron_count }
     pub fn is_stable_hydrogen(&self) -> bool { self.is_stable_hydrogen }
     pub fn is_stable_helium4(&self) -> bool { self.charge == 2 && self.neutron_count == 2 }
+    pub fn is_stable_carbon12(&self) -> bool { self.charge == 6 && self.neutron_count == 6 }
     pub fn is_sleeping(&self) -> bool { self.is_sleeping }
     pub fn is_crystallized(&self) -> bool { self.is_crystallized }
     pub fn crystal_bonds(&self) -> &Vec<usize> { &self.crystal_bonds }
@@ -340,4 +375,21 @@ impl Proton {
     pub fn set_freeze_cooldown(&mut self, cooldown: f32) { self.freeze_cooldown = cooldown; }
     pub fn last_red_wave_hit_time(&self) -> f32 { self.last_red_wave_hit_time }
     pub fn set_last_red_wave_hit_time(&mut self, time: f32) { self.last_red_wave_hit_time = time; }
+
+    // Oxygen-16 bonding getters/setters
+    pub fn is_oxygen16_bonded(&self) -> bool { self.is_oxygen16_bonded }
+    pub fn set_oxygen16_bonded(&mut self, bonded: bool) { self.is_oxygen16_bonded = bonded; }
+    pub fn oxygen_bond_partner(&self) -> Option<usize> { self.oxygen_bond_partner }
+    pub fn set_oxygen_bond_partner(&mut self, partner: Option<usize>) { self.oxygen_bond_partner = partner; }
+    pub fn oxygen_bond_rest_length(&self) -> f32 { self.oxygen_bond_rest_length }
+    pub fn set_oxygen_bond_rest_length(&mut self, length: f32) { self.oxygen_bond_rest_length = length; }
+    pub fn clear_oxygen_bond(&mut self) {
+        self.is_oxygen16_bonded = false;
+        self.oxygen_bond_partner = None;
+        self.oxygen_bond_rest_length = 0.0;
+    }
+
+    // Water molecule getters/setters
+    pub fn is_h2o(&self) -> bool { self.is_h2o }
+    pub fn set_h2o(&mut self, is_water: bool) { self.is_h2o = is_water; }
 }

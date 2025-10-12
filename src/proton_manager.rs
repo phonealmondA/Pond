@@ -58,6 +58,9 @@ impl ProtonManager {
         // STEP 2.6: H crystallization (phase transitions)
         self.update_h_crystallization(delta_time);
 
+        // STEP 2.7: O16 bond forces and breaking
+        self.update_oxygen_bonds(delta_time);
+
         // STEP 3: Solid collisions (H and He4)
         self.handle_solid_collisions();
 
@@ -124,8 +127,12 @@ impl ProtonManager {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
                 if !proton.is_alive() || proton.is_marked_for_deletion() {
-                    // Never remove stable hydrogen or stable Helium-4
-                    if !proton.is_stable_hydrogen() && !proton.is_stable_helium4() {
+                    // Never remove stable particles: H1, He4, C12, O16 bonded, or H2O
+                    if !proton.is_stable_hydrogen()
+                        && !proton.is_stable_helium4()
+                        && !proton.is_stable_carbon12()
+                        && !proton.is_oxygen16_bonded()
+                        && !proton.is_h2o() {
                         *proton_opt = None;
                     }
                 }
@@ -137,6 +144,9 @@ impl ProtonManager {
     pub fn draw(&self, segments: i32) {
         // First draw crystal bonds
         self.draw_crystal_bonds();
+
+        // Then draw oxygen bonds
+        self.draw_oxygen_bonds();
 
         // Then draw protons on top
         for proton_opt in &self.protons {
@@ -167,6 +177,31 @@ impl ProtonManager {
                                     // Draw thin white/cyan line for bond
                                     let bond_color = Color::from_rgba(180, 220, 255, 180);
                                     draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 1.5, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw oxygen bond lines for O16 bonded pairs (C12 + He4)
+    fn draw_oxygen_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_oxygen16_bonded() {
+                    if let Some(partner_idx) = proton.oxygen_bond_partner() {
+                        // Only draw each bond once (from lower index to higher)
+                        if partner_idx > i {
+                            if let Some(partner) = &self.protons[partner_idx] {
+                                if partner.is_alive() && partner.is_oxygen16_bonded() {
+                                    let pos1 = proton.position();
+                                    let pos2 = partner.position();
+
+                                    // Draw light blue line for O16 bond
+                                    let bond_color = Color::from_rgba(100, 180, 255, 200);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.0, bond_color);
                                 }
                             }
                         }
@@ -207,8 +242,12 @@ impl ProtonManager {
     pub fn clear(&mut self) {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
-                // Preserve stable H1 and He4 only
-                if !proton.is_stable_hydrogen() && !proton.is_stable_helium4() {
+                // Preserve stable H1, He4, C12, O16 bonded, and H2O
+                if !proton.is_stable_hydrogen()
+                    && !proton.is_stable_helium4()
+                    && !proton.is_stable_carbon12()
+                    && !proton.is_oxygen16_bonded()
+                    && !proton.is_h2o() {
                     *proton_opt = None;
                 }
             }
@@ -217,13 +256,29 @@ impl ProtonManager {
         self.spawn_cooldowns.clear();
     }
 
-    /// Get proton count (excluding stable hydrogen and He4)
+    /// Delete all stable H protons
+    pub fn delete_stable_hydrogen(&mut self) {
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_stable_hydrogen() {
+                    *proton_opt = None;
+                }
+            }
+        }
+    }
+
+    /// Get proton count (excluding stable hydrogen, He4, C12, O16 bonded, and H2O)
     pub fn get_proton_count(&self) -> usize {
         self.protons
             .iter()
             .filter(|p| {
                 if let Some(proton) = p {
-                    proton.is_alive() && !proton.is_stable_hydrogen() && !proton.is_stable_helium4()
+                    proton.is_alive()
+                        && !proton.is_stable_hydrogen()
+                        && !proton.is_stable_helium4()
+                        && !proton.is_stable_carbon12()
+                        && !proton.is_oxygen16_bonded()
+                        && !proton.is_h2o()
                 } else {
                     false
                 }
@@ -393,11 +448,13 @@ impl ProtonManager {
 
     /// Apply repulsion force from red (low-frequency) waves to H-, He3, He4, and H protons
     /// Dark red waves (lowest 5 colors) MELT ice bonds after 5 hits
+    /// NOTE: C12, O16 bonded pairs, and H2O are intentionally excluded from red wave repulsion
     fn apply_red_wave_repulsion(&mut self, delta_time: f32, ring_manager: &RingManager) {
         // Get all rings
         let rings = ring_manager.get_all_rings();
 
         // Collect protons affected by red waves: H-, He3, He4, and H (neutral deuterium)
+        // C12, O16 bonded pairs, and H2O are NOT affected by red waves (stable heavy particles)
         let mut affected_protons: Vec<(usize, Vec2, f32, bool)> = Vec::new();
         for (i, proton_opt) in self.protons.iter().enumerate() {
             if let Some(proton) = proton_opt {
@@ -405,7 +462,13 @@ impl ProtonManager {
                     let charge = proton.charge();
                     let neutron_count = proton.neutron_count();
 
+                    // Skip O16 bonded particles and H2O molecules
+                    if proton.is_oxygen16_bonded() || proton.is_h2o() {
+                        continue;
+                    }
+
                     // Check if this proton type is affected by red waves
+                    // C12 (charge=6, neutron_count=6) is intentionally NOT included here
                     let is_affected = charge == -1  // H-
                         || (charge == 1 && neutron_count == 2)  // He3
                         || (charge == 2 && neutron_count == 2)  // He4
@@ -740,9 +803,82 @@ impl ProtonManager {
         }
     }
 
-    /// Handle solid collisions between H and He4 protons
+    /// Update O16 molecular bonds (spring forces and breaking)
+    fn update_oxygen_bonds(&mut self, delta_time: f32) {
+        // Collect all O16 bonded pairs
+        let mut bonded_pairs: Vec<(usize, usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_oxygen16_bonded() {
+                    if let Some(partner_idx) = proton.oxygen_bond_partner() {
+                        // Only process each pair once
+                        if partner_idx > i {
+                            if let Some(partner) = &self.protons[partner_idx] {
+                                if partner.is_alive() && partner.is_oxygen16_bonded() {
+                                    bonded_pairs.push((
+                                        i,
+                                        partner_idx,
+                                        proton.position(),
+                                        partner.position(),
+                                        proton.mass(),
+                                        partner.mass(),
+                                        proton.oxygen_bond_rest_length(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply spring forces to maintain bonds and check for breaking
+        let mut bonds_to_break: Vec<(usize, usize)> = Vec::new();
+
+        for (idx1, idx2, pos1, pos2, m1, m2, rest_length) in bonded_pairs {
+            let delta = pos2 - pos1;
+            let dist = delta.length();
+
+            // Check if bond should break
+            if dist > proton::OXYGEN16_BREAKING_DISTANCE {
+                bonds_to_break.push((idx1, idx2));
+                continue;
+            }
+
+            // Apply spring force to maintain bond distance
+            if dist > 0.1 {
+                let displacement = dist - rest_length;
+                let force_magnitude = displacement * proton::OXYGEN16_BOND_STRENGTH;
+                let dir = delta / dist;
+                let force = dir * force_magnitude;
+
+                // Apply forces to both particles
+                if let Some(p1) = &mut self.protons[idx1] {
+                    let acc1 = force / m1;
+                    p1.add_velocity(acc1 * delta_time);
+                }
+                if let Some(p2) = &mut self.protons[idx2] {
+                    let acc2 = -force / m2;
+                    p2.add_velocity(acc2 * delta_time);
+                }
+            }
+        }
+
+        // Break bonds that are too stretched
+        for (idx1, idx2) in bonds_to_break {
+            if let Some(p1) = &mut self.protons[idx1] {
+                p1.clear_oxygen_bond();
+            }
+            if let Some(p2) = &mut self.protons[idx2] {
+                p2.clear_oxygen_bond();
+            }
+        }
+    }
+
+    /// Handle solid collisions between H, He4, C12, O16 bonded particles, and H2O protons
     fn handle_solid_collisions(&mut self) {
-        // Collect solid proton data (H and He4)
+        // Collect solid proton data (H, He4, C12, O16 bonded, and H2O)
         let mut solid_protons: Vec<(usize, Vec2, Vec2, f32, f32)> = Vec::new();
 
         for (i, proton_opt) in self.protons.iter().enumerate() {
@@ -751,8 +887,34 @@ impl ProtonManager {
                     let charge = proton.charge();
                     let neutron_count = proton.neutron_count();
 
-                    // H (charge=0, neutron=1) and He4 (charge=2, neutron=2) are solid
-                    if (charge == 0 && neutron_count == 1) || (charge == 2 && neutron_count == 2) {
+                    // H2O molecules are solid
+                    if proton.is_h2o() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    // O16 bonded particles are solid
+                    if proton.is_oxygen16_bonded() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    // H (charge=0, neutron=1), He4 (charge=2, neutron=2), and C12 (charge=6, neutron=6) are solid
+                    if (charge == 0 && neutron_count == 1)
+                        || (charge == 2 && neutron_count == 2)
+                        || (charge == 6 && neutron_count == 6) {
                         solid_protons.push((
                             i,
                             proton.position(),
@@ -869,7 +1031,7 @@ impl ProtonManager {
 
             let (pos1, vel1, charge1, neutron1, radius1, mass1, energy1) = {
                 let p = self.protons[i].as_ref().unwrap();
-                if !p.is_alive() || p.is_stable_hydrogen() || p.is_stable_helium4() {
+                if !p.is_alive() || p.is_stable_hydrogen() || p.is_stable_helium4() || p.is_stable_carbon12() {
                     continue;
                 }
                 (p.position(), p.velocity(), p.charge(), p.neutron_count(), p.radius(), p.mass(), p.energy())
@@ -882,7 +1044,7 @@ impl ProtonManager {
 
                 let (pos2, vel2, charge2, neutron2, radius2, mass2, energy2) = {
                     let p = self.protons[j].as_ref().unwrap();
-                    if !p.is_alive() || p.is_stable_hydrogen() || p.is_stable_helium4() {
+                    if !p.is_alive() || p.is_stable_hydrogen() || p.is_stable_helium4() || p.is_stable_carbon12() {
                         continue;
                     }
                     (p.position(), p.velocity(), p.charge(), p.neutron_count(), p.radius(), p.mass(), p.energy())
@@ -923,8 +1085,11 @@ impl ProtonManager {
                         he3.set_neutron_count(2);
                         self.protons[i] = Some(he3);
 
-                        // Spawn energy wave (D + H+ → He3)
-                        ring_manager.add_energy_ring(center_of_mass, combined_energy);
+                        // Spawn energy wave (D + H+ → He3) with dark red to yellow color
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
 
                         // Delete second proton
                         self.protons[j] = None;
@@ -952,16 +1117,18 @@ impl ProtonManager {
                         he4.set_max_lifetime(-1.0); // Helium-4 is stable
                         self.protons[i] = Some(he4);
 
-                        // Spawn BIG energy waves with random colors between blue and white
-                        // Blue = (0,0,1), White = (1,1,1)
-                        // Random interpolation: (t, t, 1) where t ∈ [0,1]
+                        // Spawn BIG energy waves with random colors between dark red and almost yellow
+                        // Dark red = (0.17,0,0), Almost yellow = (1.0,0.8,0)
+                        // Use cubic bias to favor dark red: t^3 keeps most values near 0
                         use macroquad::rand::gen_range;
-                        let t1 = gen_range(0.0, 1.0);
-                        let color1 = Color::new(t1, t1, 1.0, 1.0);
+                        let t1: f32 = gen_range(0.0, 1.0);
+                        let t1 = t1.powf(3.0);
+                        let color1 = Color::new(0.17 + 0.83*t1, 0.8*t1, 0.0, 1.0);
                         ring_manager.add_ring_with_color(center_of_mass, color1);
 
-                        let t2 = gen_range(0.0, 1.0);
-                        let color2 = Color::new(t2, t2, 1.0, 1.0);
+                        let t2: f32 = gen_range(0.0, 1.0);
+                        let t2 = t2.powf(3.0);
+                        let color2 = Color::new(0.17 + 0.83*t2, 0.8*t2, 0.0, 1.0);
                         ring_manager.add_ring_with_color(center_of_mass, color2);
 
                         // Spawn 2 high-energy protons
@@ -1016,13 +1183,292 @@ impl ProtonManager {
                     he3.set_neutron_count(2);
                     self.protons[i] = Some(he3);
 
-                    // Spawn energy wave (H- + H+ → He3)
-                    ring_manager.add_energy_ring(center_of_mass, combined_energy);
+                    // Spawn energy wave (H- + H+ → He3) with dark red to yellow color
+                    use macroquad::rand::gen_range;
+                    let t: f32 = gen_range(0.0, 1.0);
+                    let t = t.powf(3.0);
+                    ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
 
                     // Delete second proton
                     self.protons[j] = None;
                     break;
                 }
+            }
+        }
+
+        // FUSION CASE 4: Triple-alpha process - Three He4 → C12
+        // Collect all He4 particles
+        let mut he4_particles: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_stable_helium4() {
+                    he4_particles.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Check all combinations of three He4 particles
+        for i in 0..he4_particles.len() {
+            for j in (i + 1)..he4_particles.len() {
+                for k in (j + 1)..he4_particles.len() {
+                    let (idx1, pos1, vel1, r1, m1, e1) = he4_particles[i];
+                    let (idx2, pos2, vel2, r2, m2, e2) = he4_particles[j];
+                    let (idx3, pos3, vel3, r3, m3, e3) = he4_particles[k];
+
+                    // Check if all three are within collision range of each other
+                    let dist12_sq = pos1.distance_squared(pos2);
+                    let dist13_sq = pos1.distance_squared(pos3);
+                    let dist23_sq = pos2.distance_squared(pos3);
+
+                    let collision_dist12 = r1 + r2;
+                    let collision_dist13 = r1 + r3;
+                    let collision_dist23 = r2 + r3;
+
+                    // All three must be colliding with each other
+                    if dist12_sq <= collision_dist12 * collision_dist12 &&
+                       dist13_sq <= collision_dist13 * collision_dist13 &&
+                       dist23_sq <= collision_dist23 * collision_dist23
+                    {
+                        // Calculate combined energy
+                        let combined_energy = e1 + e2 + e3;
+
+                        // Check energy threshold
+                        if combined_energy < proton::TRIPLE_ALPHA_ENERGY_THRESHOLD {
+                            continue;
+                        }
+
+                        // Calculate average relative velocity
+                        let rel_vel12 = vel1 - vel2;
+                        let rel_vel13 = vel1 - vel3;
+                        let rel_vel23 = vel2 - vel3;
+                        let avg_rel_speed = (rel_vel12.length() + rel_vel13.length() + rel_vel23.length()) / 3.0;
+
+                        // Check velocity threshold
+                        if avg_rel_speed < proton::TRIPLE_ALPHA_VELOCITY_THRESHOLD {
+                            continue;
+                        }
+
+                        // FUSION OCCURS!
+                        // Calculate center of mass
+                        let total_mass = m1 + m2 + m3;
+                        let center_of_mass = (pos1 * m1 + pos2 * m2 + pos3 * m3) / total_mass;
+                        let combined_vel = (vel1 * m1 + vel2 * m2 + vel3 * m3) / total_mass;
+
+                        // Create Carbon-12 in first slot
+                        let mut c12 = Proton::new(
+                            center_of_mass,
+                            combined_vel,
+                            Color::from_rgba(100, 100, 100, 255),
+                            combined_energy,
+                            6,
+                        );
+                        c12.set_neutron_count(6);
+                        c12.set_max_lifetime(-1.0); // Carbon-12 is stable
+                        self.protons[idx1] = Some(c12);
+
+                        // Spawn energy wave with dark red to almost yellow (favoring dark red)
+                        // Dark red = (0.17,0,0), Almost yellow = (1.0,0.8,0)
+                        // Use cubic bias to favor dark red: t^3 keeps most values near 0
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        let fusion_color = Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0);
+                        ring_manager.add_ring_with_color(center_of_mass, fusion_color);
+
+                        // Delete the other two He4 particles
+                        self.protons[idx2] = None;
+                        self.protons[idx3] = None;
+
+                        // Only perform one fusion per update cycle
+                        return;
+                    }
+                }
+            }
+        }
+
+        // BONDING CASE: C12 + He4 → O16 bonded pair (alpha capture on carbon)
+        // Collect all unbonded C12 and He4 particles
+        let mut c12_particles: Vec<(usize, Vec2, Vec2, f32)> = Vec::new();
+        let mut he4_particles: Vec<(usize, Vec2, Vec2, f32)> = Vec::new();
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && !proton.is_oxygen16_bonded() {
+                    if proton.is_stable_carbon12() {
+                        c12_particles.push((i, proton.position(), proton.velocity(), proton.radius()));
+                    } else if proton.is_stable_helium4() {
+                        he4_particles.push((i, proton.position(), proton.velocity(), proton.radius()));
+                    }
+                }
+            }
+        }
+
+        // Check all C12-He4 pairs for bonding
+        for (c12_idx, c12_pos, c12_vel, c12_r) in &c12_particles {
+            for (he4_idx, he4_pos, he4_vel, he4_r) in &he4_particles {
+                let dist_sq = c12_pos.distance_squared(*he4_pos);
+                let collision_dist = c12_r + he4_r;
+
+                // Check if colliding
+                if dist_sq <= collision_dist * collision_dist {
+                    let dist = dist_sq.sqrt();
+
+                    // Calculate relative velocity
+                    let rel_vel = *c12_vel - *he4_vel;
+                    let rel_speed = rel_vel.length();
+
+                    // Check velocity threshold
+                    if rel_speed >= proton::OXYGEN16_CAPTURE_VELOCITY_THRESHOLD {
+                        // BONDING OCCURS!
+                        // Calculate bond rest length
+                        let bond_rest_length = dist.max(1.0);
+
+                        // Calculate midpoint for energy wave
+                        let midpoint = (*c12_pos + *he4_pos) / 2.0;
+
+                        // Set bonding on both particles
+                        if let Some(c12) = &mut self.protons[*c12_idx] {
+                            c12.set_oxygen16_bonded(true);
+                            c12.set_oxygen_bond_partner(Some(*he4_idx));
+                            c12.set_oxygen_bond_rest_length(bond_rest_length);
+                        }
+                        if let Some(he4) = &mut self.protons[*he4_idx] {
+                            he4.set_oxygen16_bonded(true);
+                            he4.set_oxygen_bond_partner(Some(*c12_idx));
+                            he4.set_oxygen_bond_rest_length(bond_rest_length);
+                        }
+
+                        // Spawn energy wave at bonding site (dark red to yellow, favoring dark red)
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(midpoint, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                        // Only one bonding per update cycle
+                        return;
+                    }
+                }
+            }
+        }
+
+        // WATER FORMATION: O16 bonded pair + 2 H atoms → H2O molecule
+        // Collect all O16 bonded pairs
+        let mut o16_pairs: Vec<(usize, usize, Vec2, f32, f32, f32, Vec2, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_oxygen16_bonded() {
+                    if let Some(partner_idx) = proton.oxygen_bond_partner() {
+                        if partner_idx > i {
+                            if let Some(partner) = &self.protons[partner_idx] {
+                                if partner.is_alive() && partner.is_oxygen16_bonded() {
+                                    // Calculate midpoint of O16 pair
+                                    let midpoint = (proton.position() + partner.position()) / 2.0;
+                                    let mass1 = proton.mass();
+                                    let mass2 = partner.mass();
+                                    let energy1 = proton.energy();
+                                    let energy2 = partner.energy();
+                                    let vel1 = proton.velocity();
+                                    let vel2 = partner.velocity();
+                                    o16_pairs.push((i, partner_idx, midpoint, mass1 + mass2, energy1 + energy2, 0.0, vel1, vel2));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Collect all available H atoms (not crystallized)
+        let mut h_atoms: Vec<(usize, Vec2, f32, f32, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 && !proton.is_crystallized() {
+                    h_atoms.push((i, proton.position(), proton.mass(), proton.energy(), proton.velocity()));
+                }
+            }
+        }
+
+        // Check each O16 pair for nearby H atoms
+        for (o16_idx1, o16_idx2, o16_midpoint, o16_mass, o16_energy, _, o16_vel1, o16_vel2) in o16_pairs {
+            // Find two H atoms near the O16 midpoint
+            let mut nearby_h: Vec<(usize, f32, f32, f32, Vec2)> = Vec::new();
+            for (h_idx, h_pos, h_mass, h_energy, h_vel) in &h_atoms {
+                let dist = o16_midpoint.distance(*h_pos);
+                if dist < proton::WATER_CAPTURE_RANGE {
+                    nearby_h.push((*h_idx, *h_mass, *h_energy, dist, *h_vel));
+                }
+            }
+
+            // Need at least 2 H atoms
+            if nearby_h.len() >= 2 {
+                // Sort by distance and take the two closest
+                nearby_h.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                let h1_idx = nearby_h[0].0;
+                let h1_mass = nearby_h[0].1;
+                let h1_energy = nearby_h[0].2;
+                let h1_vel = nearby_h[0].4;
+
+                let h2_idx = nearby_h[1].0;
+                let h2_mass = nearby_h[1].1;
+                let h2_energy = nearby_h[1].2;
+                let h2_vel = nearby_h[1].4;
+
+                // WATER FORMATION OCCURS!
+                // Calculate center of mass and combined velocity
+                let total_mass = o16_mass + h1_mass + h2_mass;
+                let o16_com_mass = o16_mass / 2.0;
+                let combined_momentum = o16_vel1 * o16_com_mass + o16_vel2 * o16_com_mass + h1_vel * h1_mass + h2_vel * h2_mass;
+                let combined_vel = combined_momentum / total_mass;
+                let combined_energy = o16_energy + h1_energy + h2_energy;
+
+                // Calculate center of mass position (weighted average)
+                // Get O16 positions for accurate COM calculation
+                let (o16_pos1, o16_pos2) = {
+                    let p1 = self.protons[o16_idx1].as_ref().unwrap().position();
+                    let p2 = self.protons[o16_idx2].as_ref().unwrap().position();
+                    (p1, p2)
+                };
+                let (h1_pos, h2_pos) = {
+                    let h1p = self.protons[h1_idx].as_ref().unwrap().position();
+                    let h2p = self.protons[h2_idx].as_ref().unwrap().position();
+                    (h1p, h2p)
+                };
+
+                let center_of_mass = (o16_pos1 * o16_com_mass + o16_pos2 * o16_com_mass + h1_pos * h1_mass + h2_pos * h2_mass) / total_mass;
+
+                // Create H2O molecule in first O16 slot
+                let mut h2o = Proton::new(
+                    center_of_mass,
+                    combined_vel,
+                    Color::from_rgba(40, 100, 180, 255),
+                    combined_energy,
+                    10, // Total charge: 6 (C) + 2 (He) + 1 (H) + 1 (H) = 10
+                );
+                h2o.set_neutron_count(8); // Total neutrons: 6 (C) + 2 (He) = 8
+                h2o.set_max_lifetime(-1.0); // Water is stable
+                h2o.set_h2o(true);
+                self.protons[o16_idx1] = Some(h2o);
+
+                // Delete the other particles
+                self.protons[o16_idx2] = None;
+                self.protons[h1_idx] = None;
+                self.protons[h2_idx] = None;
+
+                // Spawn wave at formation site (dark red to yellow, favoring dark red)
+                use macroquad::rand::gen_range;
+                let t: f32 = gen_range(0.0, 1.0);
+                let t = t.powf(3.0);
+                ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                // Only one water formation per update cycle
+                return;
             }
         }
     }

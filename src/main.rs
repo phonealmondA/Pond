@@ -66,7 +66,7 @@ async fn main() {
         draw_text(&format!("Atoms: {}", atom_manager.get_atom_count()), 10.0, 90.0, 30.0, GREEN);
         draw_text(&format!("Protons: {}", proton_manager.get_proton_count()), 10.0, 120.0, 30.0, GREEN);
         draw_text("RustPond v0.2", 10.0, 150.0, 20.0, GRAY);
-        draw_text("Click: Spawn Ring | C: Cycle Color | Space: Clear All | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
+        draw_text("Click: Spawn Ring | C: Cycle Color | Space: Clear All | H: Delete H | ESC: Exit", 10.0, 180.0, 20.0, GRAY);
 
         // Show current ring color
         let color_info = ring_manager.get_current_frequency_info();
@@ -100,6 +100,11 @@ async fn main() {
             ring_manager.clear();
             atom_manager.clear();
             proton_manager.clear();
+        }
+
+        // Delete all stable H protons with H key
+        if is_key_pressed(KeyCode::H) {
+            proton_manager.delete_stable_hydrogen();
         }
 
         next_frame().await

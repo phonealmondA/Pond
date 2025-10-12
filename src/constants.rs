@@ -4,8 +4,8 @@
 use macroquad::prelude::*;
 
 // ===== SYSTEM LIMITS =====
-pub const MAX_PROTONS: usize = 500;
-pub const MAX_ATOMS: usize = 50;
+pub const MAX_PROTONS: usize = 750;
+pub const MAX_ATOMS: usize = 250;
 pub const CIRCLE_SEGMENTS: i32 = 24;
 pub const COLOR_PALETTE_SIZE: usize = 35;
 pub const COLOR_CYCLE_SIZE: usize = 6;
@@ -72,6 +72,23 @@ pub mod proton {
 
     pub const HELIUM3_RADIUS_MULTIPLIER: f32 = 1.5;
     pub const HELIUM4_RADIUS_MULTIPLIER: f32 = 1.8;
+
+    // Carbon-12 (triple-alpha process)
+    pub const CARBON12_COLOR: (u8, u8, u8) = (100, 100, 100);
+    pub const CARBON12_RADIUS_MULTIPLIER: f32 = 2.5;
+    pub const TRIPLE_ALPHA_VELOCITY_THRESHOLD: f32 = 0.7;
+    pub const TRIPLE_ALPHA_ENERGY_THRESHOLD: f32 = 60.0;
+
+    // Oxygen-16 (alpha capture on carbon)
+    pub const OXYGEN16_COLOR: (u8, u8, u8) = (100, 180, 255);
+    pub const OXYGEN16_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.6;
+    pub const OXYGEN16_BOND_STRENGTH: f32 = 800.0;
+    pub const OXYGEN16_BREAKING_DISTANCE: f32 = 180.0;
+
+    // Water (H2O molecule)
+    pub const WATER_COLOR: (u8, u8, u8) = (40, 100, 180);
+    pub const WATER_RADIUS_MULTIPLIER: f32 = 3.0;
+    pub const WATER_CAPTURE_RANGE: f32 = 45.0;
 }
 
 // ===== PROTON MANAGER PHYSICS =====
@@ -123,14 +140,14 @@ pub mod proton_manager {
     pub const RED_WAVE_HIT_COOLDOWN: f32 = 0.3; // Cooldown between hits to prevent double-counting
 
     // H crystallization (phase transitions)
-    pub const H_CRYSTAL_MIN_NEIGHBORS: usize = 9; // Minimum H's to crystallize (1 center + 6 sides)
-    pub const H_CRYSTAL_NEIGHBOR_DISTANCE: f32 = 110.0; // Max distance to be neighbors
+    pub const H_CRYSTAL_MIN_NEIGHBORS: usize = 3; // Minimum H's to crystallize (1 center + 6 sides)
+    pub const H_CRYSTAL_NEIGHBOR_DISTANCE: f32 = 80.0; // Max distance to be neighbors
     pub const H_CRYSTAL_MIN_SPACING: f32 = 40.0; // Minimum distance - too close particles cannot bond
-    pub const H_CRYSTAL_BOND_STRENGTH: f32 = 100.0; // Spring force between bonded H's (very strong)
-    pub const H_CRYSTAL_BOND_REST_LENGTH: f32 = 65.0; // Ideal distance from center to sides
-    pub const H_CRYSTAL_VIBRATION_THRESHOLD: f32 = 90.0; // Space needed to start vibrating
-    pub const H_CRYSTAL_BREAKOFF_DISTANCE: f32 = 200.0; // Distance at which bonds break
-    pub const H_CRYSTAL_FREEZE_COOLDOWN: f32 = 3.0; // Cooldown time before can refreeze after melting
+    pub const H_CRYSTAL_BOND_STRENGTH: f32 = 70.0; // Spring force between bonded H's (very strong)
+    pub const H_CRYSTAL_BOND_REST_LENGTH: f32 = 45.0; // Ideal distance from center to sides
+    pub const H_CRYSTAL_VIBRATION_THRESHOLD: f32 = 50.0; // Space needed to start vibrating
+    pub const H_CRYSTAL_BREAKOFF_DISTANCE: f32 = 70.0; // Distance at which bonds break
+    pub const H_CRYSTAL_FREEZE_COOLDOWN: f32 = 9.0; // Cooldown time before can refreeze after melting
 }
 
 // ===== ATOM PHYSICS =====
