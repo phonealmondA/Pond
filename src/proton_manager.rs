@@ -127,12 +127,16 @@ impl ProtonManager {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
                 if !proton.is_alive() || proton.is_marked_for_deletion() {
-                    // Never remove stable particles: H1, He4, C12, O16 bonded, or H2O
+                    // Never remove stable particles: H1, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, or S32
                     if !proton.is_stable_hydrogen()
                         && !proton.is_stable_helium4()
                         && !proton.is_stable_carbon12()
                         && !proton.is_oxygen16_bonded()
-                        && !proton.is_h2o() {
+                        && !proton.is_h2o()
+                        && !proton.is_neon20()
+                        && !proton.is_magnesium24()
+                        && !proton.is_silicon28()
+                        && !proton.is_sulfur32() {
                         *proton_opt = None;
                     }
                 }
@@ -220,7 +224,7 @@ impl ProtonManager {
                     let pos = proton.position();
 
                     // Measure text dimensions for centering
-                    let font_size = 12.0;
+                    let font_size = 18.0;
                     let text_dims = measure_text(&label, None, font_size as u16, 1.0);
 
                     // Center text on proton (both horizontally and vertically)
@@ -242,12 +246,16 @@ impl ProtonManager {
     pub fn clear(&mut self) {
         for proton_opt in &mut self.protons {
             if let Some(proton) = proton_opt {
-                // Preserve stable H1, He4, C12, O16 bonded, and H2O
+                // Preserve stable H1, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, and S32
                 if !proton.is_stable_hydrogen()
                     && !proton.is_stable_helium4()
                     && !proton.is_stable_carbon12()
                     && !proton.is_oxygen16_bonded()
-                    && !proton.is_h2o() {
+                    && !proton.is_h2o()
+                    && !proton.is_neon20()
+                    && !proton.is_magnesium24()
+                    && !proton.is_silicon28()
+                    && !proton.is_sulfur32() {
                     *proton_opt = None;
                 }
             }
@@ -267,7 +275,7 @@ impl ProtonManager {
         }
     }
 
-    /// Get proton count (excluding stable hydrogen, He4, C12, O16 bonded, and H2O)
+    /// Get proton count (excluding stable hydrogen, He4, C12, O16 bonded, H2O, Ne20, Mg24, Si28, and S32)
     pub fn get_proton_count(&self) -> usize {
         self.protons
             .iter()
@@ -279,6 +287,10 @@ impl ProtonManager {
                         && !proton.is_stable_carbon12()
                         && !proton.is_oxygen16_bonded()
                         && !proton.is_h2o()
+                        && !proton.is_neon20()
+                        && !proton.is_magnesium24()
+                        && !proton.is_silicon28()
+                        && !proton.is_sulfur32()
                 } else {
                     false
                 }
@@ -887,6 +899,54 @@ impl ProtonManager {
                     let charge = proton.charge();
                     let neutron_count = proton.neutron_count();
 
+                    // S32 particles are solid
+                    if proton.is_sulfur32() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    // Si28 particles are solid
+                    if proton.is_silicon28() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    // Mg24 particles are solid
+                    if proton.is_magnesium24() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
+                    // Ne20 particles are solid
+                    if proton.is_neon20() {
+                        solid_protons.push((
+                            i,
+                            proton.position(),
+                            proton.velocity(),
+                            proton.radius(),
+                            proton.mass(),
+                        ));
+                        continue;
+                    }
+
                     // H2O molecules are solid
                     if proton.is_h2o() {
                         solid_protons.push((
@@ -1286,7 +1346,350 @@ impl ProtonManager {
                         self.protons[idx2] = None;
                         self.protons[idx3] = None;
 
-                        // Only perform one fusion per update cycle
+                                // Only perform one fusion per update cycle
+                        return;
+                    }
+                }
+            }
+        }
+
+        // FUSION CASE 5: Neon-20 formation - O16 bonded pair + He4 → Ne20
+        // Collect all O16 bonded pairs
+        let mut o16_pairs: Vec<(usize, usize, Vec2, f32, f32, f32, Vec2, Vec2)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_oxygen16_bonded() {
+                    if let Some(partner_idx) = proton.oxygen_bond_partner() {
+                        if partner_idx > i {
+                            if let Some(partner) = &self.protons[partner_idx] {
+                                if partner.is_alive() && partner.is_oxygen16_bonded() {
+                                    // Calculate midpoint of O16 pair
+                                    let midpoint = (proton.position() + partner.position()) / 2.0;
+                                    let mass1 = proton.mass();
+                                    let mass2 = partner.mass();
+                                    let energy1 = proton.energy();
+                                    let energy2 = partner.energy();
+                                    let vel1 = proton.velocity();
+                                    let vel2 = partner.velocity();
+                                    let radius1 = proton.radius();
+                                    let radius2 = partner.radius();
+                                    // Use average radius of the pair
+                                    let avg_radius = (radius1 + radius2) / 2.0;
+                                    o16_pairs.push((i, partner_idx, midpoint, mass1 + mass2, energy1 + energy2, avg_radius, vel1, vel2));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Collect all He4 particles
+        let mut he4_for_neon: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_stable_helium4() {
+                    he4_for_neon.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Check for O16 + He4 collisions to form Ne20
+        for (o16_idx1, o16_idx2, o16_midpoint, o16_mass, o16_energy, o16_radius, o16_vel1, o16_vel2) in o16_pairs {
+            for (he4_idx, he4_pos, he4_vel, he4_radius, he4_mass, he4_energy) in &he4_for_neon {
+                // Calculate distance from He4 to O16 midpoint
+                let dist_sq = o16_midpoint.distance_squared(*he4_pos);
+                let collision_dist = o16_radius + he4_radius;
+
+                // Check if colliding
+                if dist_sq <= collision_dist * collision_dist {
+                    // Calculate relative velocity (use average O16 velocity)
+                    let o16_avg_vel = (o16_vel1 + o16_vel2) / 2.0;
+                    let rel_vel = o16_avg_vel - *he4_vel;
+                    let rel_speed = rel_vel.length();
+
+                    // Check velocity threshold
+                    if rel_speed >= proton::NEON20_CAPTURE_VELOCITY_THRESHOLD {
+                        // NEON-20 FORMATION OCCURS!
+                        // Calculate center of mass and combined velocity
+                        let total_mass = o16_mass + *he4_mass;
+                        let combined_momentum = o16_vel1 * (o16_mass / 2.0) + o16_vel2 * (o16_mass / 2.0) + *he4_vel * *he4_mass;
+                        let combined_vel = combined_momentum / total_mass;
+                        let combined_energy = o16_energy + *he4_energy;
+
+                        // Calculate center of mass position
+                        let (o16_pos1, o16_pos2) = {
+                            let p1 = self.protons[o16_idx1].as_ref().unwrap().position();
+                            let p2 = self.protons[o16_idx2].as_ref().unwrap().position();
+                            (p1, p2)
+                        };
+                        let center_of_mass = (o16_pos1 * (o16_mass / 2.0) + o16_pos2 * (o16_mass / 2.0) + *he4_pos * *he4_mass) / total_mass;
+
+                        // Create Ne20 in first O16 slot
+                        let mut ne20 = Proton::new(
+                            center_of_mass,
+                            combined_vel,
+                            Color::from_rgba(255, 100, 150, 255),
+                            combined_energy,
+                            10, // Total charge: 6 (C) + 2 (He from O16) + 2 (He4) = 10
+                        );
+                        ne20.set_neutron_count(10); // Total neutrons: 6 (C) + 2 (He from O16) + 2 (He4) = 10
+                        ne20.set_max_lifetime(-1.0); // Ne20 is stable
+                        ne20.set_neon20(true);
+                        self.protons[o16_idx1] = Some(ne20);
+
+                        // Delete the other particles
+                        self.protons[o16_idx2] = None;
+                        self.protons[*he4_idx] = None;
+
+                        // Spawn energy wave (dark red to yellow, favoring dark red)
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                        // Only one neon formation per update cycle
+                        return;
+                    }
+                }
+            }
+        }
+
+        // FUSION CASE 6: Magnesium-24 formation - Ne20 + He4 → Mg24
+        // Collect all Ne20 particles
+        let mut ne20_particles: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_neon20() {
+                    ne20_particles.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Reuse He4 particles from earlier (or collect them again)
+        let mut he4_for_mg: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_stable_helium4() {
+                    he4_for_mg.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Check for Ne20 + He4 collisions to form Mg24
+        for (ne20_idx, ne20_pos, ne20_vel, ne20_radius, ne20_mass, ne20_energy) in &ne20_particles {
+            for (he4_idx, he4_pos, he4_vel, he4_radius, he4_mass, he4_energy) in &he4_for_mg {
+                let dist_sq = ne20_pos.distance_squared(*he4_pos);
+                let collision_dist = ne20_radius + he4_radius;
+
+                if dist_sq <= collision_dist * collision_dist {
+                    let rel_vel = *ne20_vel - *he4_vel;
+                    let rel_speed = rel_vel.length();
+
+                    if rel_speed >= proton::MAGNESIUM24_CAPTURE_VELOCITY_THRESHOLD {
+                        // Mg24 formation!
+                        let total_mass = ne20_mass + he4_mass;
+                        let combined_momentum = *ne20_vel * *ne20_mass + *he4_vel * *he4_mass;
+                        let combined_vel = combined_momentum / total_mass;
+                        let combined_energy = ne20_energy + he4_energy;
+                        let center_of_mass = (*ne20_pos * *ne20_mass + *he4_pos * *he4_mass) / total_mass;
+
+                        let mut mg24 = Proton::new(
+                            center_of_mass,
+                            combined_vel,
+                            Color::from_rgba(200, 200, 220, 255),
+                            combined_energy,
+                            12,
+                        );
+                        mg24.set_neutron_count(12);
+                        mg24.set_max_lifetime(-1.0);
+                        mg24.set_magnesium24(true);
+                        self.protons[*ne20_idx] = Some(mg24);
+
+                        self.protons[*he4_idx] = None;
+
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                        return;
+                    }
+                }
+            }
+        }
+
+        // FUSION CASE 7: Silicon-28 formation - Mg24 + He4 → Si28
+        // Collect all Mg24 particles
+        let mut mg24_particles: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_magnesium24() {
+                    mg24_particles.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Reuse He4 particles
+        let mut he4_for_si: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_stable_helium4() {
+                    he4_for_si.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Check for Mg24 + He4 collisions to form Si28
+        for (mg24_idx, mg24_pos, mg24_vel, mg24_radius, mg24_mass, mg24_energy) in &mg24_particles {
+            for (he4_idx, he4_pos, he4_vel, he4_radius, he4_mass, he4_energy) in &he4_for_si {
+                let dist_sq = mg24_pos.distance_squared(*he4_pos);
+                let collision_dist = mg24_radius + he4_radius;
+
+                if dist_sq <= collision_dist * collision_dist {
+                    let rel_vel = *mg24_vel - *he4_vel;
+                    let rel_speed = rel_vel.length();
+
+                    if rel_speed >= proton::SILICON28_CAPTURE_VELOCITY_THRESHOLD {
+                        // Si28 formation!
+                        let total_mass = mg24_mass + he4_mass;
+                        let combined_momentum = *mg24_vel * *mg24_mass + *he4_vel * *he4_mass;
+                        let combined_vel = combined_momentum / total_mass;
+                        let combined_energy = mg24_energy + he4_energy;
+                        let center_of_mass = (*mg24_pos * *mg24_mass + *he4_pos * *he4_mass) / total_mass;
+
+                        let mut si28 = Proton::new(
+                            center_of_mass,
+                            combined_vel,
+                            Color::from_rgba(160, 130, 90, 255),
+                            combined_energy,
+                            14,
+                        );
+                        si28.set_neutron_count(14);
+                        si28.set_max_lifetime(-1.0);
+                        si28.set_silicon28(true);
+                        self.protons[*mg24_idx] = Some(si28);
+
+                        self.protons[*he4_idx] = None;
+
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                        return;
+                    }
+                }
+            }
+        }
+
+        // FUSION CASE 8: Sulfur-32 formation - Si28 + He4 → S32
+        // Collect all Si28 particles
+        let mut si28_particles: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_silicon28() {
+                    si28_particles.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Reuse He4 particles
+        let mut he4_for_s: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_stable_helium4() {
+                    he4_for_s.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.radius(),
+                        proton.mass(),
+                        proton.energy(),
+                    ));
+                }
+            }
+        }
+
+        // Check for Si28 + He4 collisions to form S32
+        for (si28_idx, si28_pos, si28_vel, si28_radius, si28_mass, si28_energy) in &si28_particles {
+            for (he4_idx, he4_pos, he4_vel, he4_radius, he4_mass, he4_energy) in &he4_for_s {
+                let dist_sq = si28_pos.distance_squared(*he4_pos);
+                let collision_dist = si28_radius + he4_radius;
+
+                if dist_sq <= collision_dist * collision_dist {
+                    let rel_vel = *si28_vel - *he4_vel;
+                    let rel_speed = rel_vel.length();
+
+                    if rel_speed >= proton::SULFUR32_CAPTURE_VELOCITY_THRESHOLD {
+                        // S32 formation!
+                        let total_mass = si28_mass + he4_mass;
+                        let combined_momentum = *si28_vel * *si28_mass + *he4_vel * *he4_mass;
+                        let combined_vel = combined_momentum / total_mass;
+                        let combined_energy = si28_energy + he4_energy;
+                        let center_of_mass = (*si28_pos * *si28_mass + *he4_pos * *he4_mass) / total_mass;
+
+                        let mut s32 = Proton::new(
+                            center_of_mass,
+                            combined_vel,
+                            Color::from_rgba(220, 220, 80, 255),
+                            combined_energy,
+                            16,
+                        );
+                        s32.set_neutron_count(16);
+                        s32.set_max_lifetime(-1.0);
+                        s32.set_sulfur32(true);
+                        self.protons[*si28_idx] = Some(s32);
+
+                        self.protons[*he4_idx] = None;
+
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
                         return;
                     }
                 }

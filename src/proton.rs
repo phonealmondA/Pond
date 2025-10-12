@@ -46,6 +46,18 @@ pub struct Proton {
 
     // Water molecule flag
     is_h2o: bool,
+
+    // Neon-20 flag
+    is_neon20: bool,
+
+    // Magnesium-24 flag
+    is_magnesium24: bool,
+
+    // Silicon-28 flag
+    is_silicon28: bool,
+
+    // Sulfur-32 flag
+    is_sulfur32: bool,
 }
 
 impl Proton {
@@ -83,6 +95,10 @@ impl Proton {
             oxygen_bond_partner: None,
             oxygen_bond_rest_length: 0.0,
             is_h2o: false,
+            is_neon20: false,
+            is_magnesium24: false,
+            is_silicon28: false,
+            is_sulfur32: false,
         }
     }
 
@@ -218,7 +234,15 @@ impl Proton {
 
     pub fn get_element_label(&self) -> String {
         // Check molecular flags first (take precedence)
-        if self.is_h2o {
+        if self.is_sulfur32 {
+            "S32".to_string()
+        } else if self.is_silicon28 {
+            "Si28".to_string()
+        } else if self.is_magnesium24 {
+            "Mg24".to_string()
+        } else if self.is_neon20 {
+            "Ne20".to_string()
+        } else if self.is_h2o {
             "H2O".to_string()
         } else if self.is_oxygen16_bonded {
             "O16".to_string()
@@ -263,12 +287,32 @@ impl Proton {
             render_color.b = b;
         }
 
-        // Water molecule (H2O) - check first as it takes precedence
-        if self.is_h2o {
+        // Sulfur-32 - check first
+        if self.is_sulfur32 {
+            render_color = Color::from_rgba(220, 220, 80, 255);
+            render_radius *= pc::SULFUR32_RADIUS_MULTIPLIER;
+        }
+        // Silicon-28 - check second
+        else if self.is_silicon28 {
+            render_color = Color::from_rgba(160, 130, 90, 255);
+            render_radius *= pc::SILICON28_RADIUS_MULTIPLIER;
+        }
+        // Magnesium-24 - check third
+        else if self.is_magnesium24 {
+            render_color = Color::from_rgba(200, 200, 220, 255);
+            render_radius *= pc::MAGNESIUM24_RADIUS_MULTIPLIER;
+        }
+        // Neon-20 - check fourth
+        else if self.is_neon20 {
+            render_color = Color::from_rgba(255, 100, 150, 255);
+            render_radius *= pc::NEON20_RADIUS_MULTIPLIER;
+        }
+        // Water molecule (H2O) - check fifth
+        else if self.is_h2o {
             render_color = Color::from_rgba(40, 100, 180, 255);
             render_radius *= pc::WATER_RADIUS_MULTIPLIER;
         }
-        // Oxygen-16 bonded pair - check second as it overrides base element colors
+        // Oxygen-16 bonded pair - check third as it overrides base element colors
         else if self.is_oxygen16_bonded {
             render_color = Color::from_rgba(100, 180, 255, 255);
             // Keep original radius for bonded particles
@@ -392,4 +436,20 @@ impl Proton {
     // Water molecule getters/setters
     pub fn is_h2o(&self) -> bool { self.is_h2o }
     pub fn set_h2o(&mut self, is_water: bool) { self.is_h2o = is_water; }
+
+    // Neon-20 getters/setters
+    pub fn is_neon20(&self) -> bool { self.is_neon20 }
+    pub fn set_neon20(&mut self, is_neon: bool) { self.is_neon20 = is_neon; }
+
+    // Magnesium-24 getters/setters
+    pub fn is_magnesium24(&self) -> bool { self.is_magnesium24 }
+    pub fn set_magnesium24(&mut self, is_mg: bool) { self.is_magnesium24 = is_mg; }
+
+    // Silicon-28 getters/setters
+    pub fn is_silicon28(&self) -> bool { self.is_silicon28 }
+    pub fn set_silicon28(&mut self, is_si: bool) { self.is_silicon28 = is_si; }
+
+    // Sulfur-32 getters/setters
+    pub fn is_sulfur32(&self) -> bool { self.is_sulfur32 }
+    pub fn set_sulfur32(&mut self, is_s: bool) { self.is_sulfur32 = is_s; }
 }

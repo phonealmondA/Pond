@@ -89,6 +89,26 @@ pub mod proton {
     pub const WATER_COLOR: (u8, u8, u8) = (40, 100, 180);
     pub const WATER_RADIUS_MULTIPLIER: f32 = 3.0;
     pub const WATER_CAPTURE_RANGE: f32 = 45.0;
+
+    // Neon-20 (alpha capture on oxygen)
+    pub const NEON20_COLOR: (u8, u8, u8) = (255, 100, 150);
+    pub const NEON20_RADIUS_MULTIPLIER: f32 = 2.8;
+    pub const NEON20_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.65;
+
+    // Magnesium-24 (alpha capture on neon)
+    pub const MAGNESIUM24_COLOR: (u8, u8, u8) = (200, 200, 220);
+    pub const MAGNESIUM24_RADIUS_MULTIPLIER: f32 = 3.0;
+    pub const MAGNESIUM24_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.68;
+
+    // Silicon-28 (alpha capture on magnesium)
+    pub const SILICON28_COLOR: (u8, u8, u8) = (160, 130, 90);
+    pub const SILICON28_RADIUS_MULTIPLIER: f32 = 3.2;
+    pub const SILICON28_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.70;
+
+    // Sulfur-32 (alpha capture on silicon)
+    pub const SULFUR32_COLOR: (u8, u8, u8) = (220, 220, 80);
+    pub const SULFUR32_RADIUS_MULTIPLIER: f32 = 3.4;
+    pub const SULFUR32_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.72;
 }
 
 // ===== PROTON MANAGER PHYSICS =====
