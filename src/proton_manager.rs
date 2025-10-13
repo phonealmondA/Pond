@@ -61,6 +61,9 @@ impl ProtonManager {
         // STEP 2.7: O16 bond forces and breaking
         self.update_oxygen_bonds(delta_time);
 
+        // STEP 2.8: Water hydrogen bonds (polarity-based bonding)
+        self.update_water_hydrogen_bonds(delta_time);
+
         // STEP 3: Solid collisions (H and He4)
         self.handle_solid_collisions();
 
@@ -156,6 +159,9 @@ impl ProtonManager {
         // Then draw oxygen bonds
         self.draw_oxygen_bonds();
 
+        // Then draw water hydrogen bonds
+        self.draw_water_hydrogen_bonds();
+
         // Then draw protons on top
         for proton_opt in &self.protons {
             if let Some(proton) = proton_opt {
@@ -210,6 +216,41 @@ impl ProtonManager {
                                     // Draw light blue line for O16 bond
                                     let bond_color = Color::from_rgba(100, 180, 255, 200);
                                     draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.0, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw water hydrogen bond lines for H2O polar bonding
+    fn draw_water_hydrogen_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_h2o() {
+                    let pos1 = proton.position();
+                    let bonds = proton.water_h_bonds();
+
+                    // Draw bond lines to each bonded water molecule
+                    for bond_idx in bonds {
+                        // Only draw each bond once (from lower index to higher)
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_h2o() {
+                                    let pos2 = other_proton.position();
+
+                                    // Check if both molecules are frozen (ice bond)
+                                    let both_frozen = proton.is_water_frozen() && other_proton.is_water_frozen();
+
+                                    // Draw line - brighter and thicker for frozen ice bonds
+                                    let (bond_color, thickness) = if both_frozen {
+                                        (Color::from_rgba(180, 220, 255, 200), 2.5) // Bright cyan for ice
+                                    } else {
+                                        (Color::from_rgba(100, 150, 200, 120), 1.2) // Faint blue for liquid
+                                    };
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, thickness, bond_color);
                                 }
                             }
                         }
@@ -484,8 +525,8 @@ impl ProtonManager {
         // Get all rings
         let rings = ring_manager.get_all_rings();
 
-        // Collect protons affected by red waves: H-, He3, He4, and H (neutral deuterium)
-        // C12, O16 bonded pairs, and H2O are NOT affected by red waves (stable heavy particles)
+        // Collect protons affected by red waves: H-, He3, He4, H (neutral deuterium), and H2O
+        // C12 and O16 bonded pairs are NOT affected by red waves (stable heavy particles)
         let mut affected_protons: Vec<(usize, Vec2, f32, bool)> = Vec::new();
         for (i, proton_opt) in self.protons.iter().enumerate() {
             if let Some(proton) = proton_opt {
@@ -493,8 +534,8 @@ impl ProtonManager {
                     let charge = proton.charge();
                     let neutron_count = proton.neutron_count();
 
-                    // Skip O16 bonded particles and H2O molecules
-                    if proton.is_oxygen16_bonded() || proton.is_h2o() {
+                    // Skip O16 bonded particles
+                    if proton.is_oxygen16_bonded() {
                         continue;
                     }
 
@@ -503,7 +544,8 @@ impl ProtonManager {
                     let is_affected = charge == -1  // H-
                         || (charge == 1 && neutron_count == 2)  // He3
                         || (charge == 2 && neutron_count == 2)  // He4
-                        || (charge == 0 && neutron_count == 1); // H (neutral deuterium)
+                        || (charge == 0 && neutron_count == 1)  // H (neutral deuterium)
+                        || proton.is_h2o(); // H2O molecules
 
                     if is_affected {
                         let is_frozen = proton.is_crystallized();
@@ -903,6 +945,492 @@ impl ProtonManager {
             }
             if let Some(p2) = &mut self.protons[idx2] {
                 p2.clear_oxygen_bond();
+            }
+        }
+    }
+
+    /// Update water hydrogen bonds - polar molecules form weak triangular clusters
+    fn update_water_hydrogen_bonds(&mut self, delta_time: f32) {
+        use std::f32::consts::PI;
+
+        // PHASE 1: Collect all H2O molecules and initialize polar angles if needed
+        let mut water_molecules: Vec<(usize, Vec2, Vec2, f32, f32)> = Vec::new();
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && proton.is_h2o() {
+                    water_molecules.push((
+                        i,
+                        proton.position(),
+                        proton.velocity(),
+                        proton.mass(),
+                        proton.water_polar_angle(),
+                    ));
+                }
+            }
+        }
+
+        // PHASE 2: Initialize polar angles for new water molecules (random orientation)
+        // Also check for evaporation (too much speed breaks bonds)
+        for (idx, _, vel, _, angle) in &water_molecules {
+            // Check if moving too fast (evaporation)
+            let speed = vel.length();
+            if speed > proton::WATER_EVAPORATION_SPEED {
+                // Moving too fast - break all bonds (evaporation)
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.clear_water_h_bonds();
+                }
+                continue;
+            }
+
+            if *angle == 0.0 {
+                // Initialize with velocity direction + some randomness
+                let vel_angle = vel.y.atan2(vel.x);
+                let random_offset = (rand::gen_range(0.0, 1.0) - 0.5) * PI;
+                let new_angle = vel_angle + random_offset;
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_water_polar_angle(new_angle);
+                }
+            }
+        }
+
+        // PHASE 3: Clear existing bonds (we'll rebuild them each frame)
+        for (idx, _, _, _, _) in &water_molecules {
+            if let Some(proton) = &mut self.protons[*idx] {
+                proton.clear_water_h_bonds();
+            }
+        }
+
+        // PHASE 4: Form new bonds based on polarity
+        for i in 0..water_molecules.len() {
+            let (idx_a, pos_a, _, _, angle_a) = water_molecules[i];
+
+            // Calculate pole positions for molecule A
+            // Negative pole at angle, positive pole at angle + PI
+            let neg_pole_a = Vec2::new(
+                pos_a.x + angle_a.cos() * 30.0,
+                pos_a.y + angle_a.sin() * 30.0,
+            );
+            let pos_pole_a = Vec2::new(
+                pos_a.x + (angle_a + PI).cos() * 30.0,
+                pos_a.y + (angle_a + PI).sin() * 30.0,
+            );
+
+            // Count existing bonds from negative and positive sides
+            // All H2O can have up to 5 bonds total (3 neg + 2 pos)
+            // 0-2 bonds = liquid, 3-5 bonds = frozen and stationary
+            let mut neg_bonds = 0;
+            let mut pos_bonds = 0;
+
+            if let Some(proton_a) = &self.protons[idx_a] {
+                let total_bonds = proton_a.water_h_bonds().len();
+                // Layout: 3 negative bonds first, then 2 positive bonds
+                neg_bonds = total_bonds.min(3);
+                pos_bonds = if total_bonds > 3 {
+                    (total_bonds - 3).min(2)
+                } else {
+                    0
+                };
+            }
+
+            // Check nearby water molecules
+            for j in (i + 1)..water_molecules.len() {
+                let (idx_b, pos_b, _, _, angle_b) = water_molecules[j];
+
+                let dist = pos_a.distance(pos_b);
+                if dist > proton::WATER_H_BOND_RANGE {
+                    continue;
+                }
+
+                // Calculate pole positions for molecule B
+                let neg_pole_b = Vec2::new(
+                    pos_b.x + angle_b.cos() * 30.0,
+                    pos_b.y + angle_b.sin() * 30.0,
+                );
+                let pos_pole_b = Vec2::new(
+                    pos_b.x + (angle_b + PI).cos() * 30.0,
+                    pos_b.y + (angle_b + PI).sin() * 30.0,
+                );
+
+                // Check bond limits for molecule B
+                // All H2O can have up to 3 negative bonds, 2 positive bonds
+                let b_neg_bonds = if let Some(p) = &self.protons[idx_b] {
+                    let total = p.water_h_bonds().len();
+                    total.min(3) // All H2O can have up to 3 negative bonds
+                } else {
+                    0
+                };
+                let b_pos_bonds = if let Some(p) = &self.protons[idx_b] {
+                    let total = p.water_h_bonds().len();
+                    if total > 3 {
+                        (total - 3).min(2) // 2 positive bonds after 3 negative
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+
+                // Try to form bonds based on polarity attraction
+                // Negative A to Positive B (if both have capacity)
+                // All H2O can have up to 3 negative bonds
+                if neg_bonds < 3 && b_pos_bonds < 2 {
+                    let bond_dist = neg_pole_a.distance(pos_pole_b);
+
+                    // Check if either molecule has exactly 2 bonds - if so, use shorter breaking distance
+                    let total_a = if let Some(p) = &self.protons[idx_a] { p.water_h_bonds().len() } else { 0 };
+                    let total_b = if let Some(p) = &self.protons[idx_b] { p.water_h_bonds().len() } else { 0 };
+                    let max_bond_dist = if total_a == 2 || total_b == 2 {
+                        proton::WATER_2BOND_BREAKING_DISTANCE
+                    } else {
+                        proton::WATER_H_BOND_RANGE
+                    };
+
+                    if bond_dist < max_bond_dist {
+                        if let Some(proton_a) = &mut self.protons[idx_a] {
+                            proton_a.add_water_h_bond(idx_b, proton::WATER_H_BOND_REST_LENGTH);
+                            neg_bonds += 1;
+                        }
+                        if let Some(proton_b) = &mut self.protons[idx_b] {
+                            proton_b.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
+                        }
+                        continue;
+                    }
+                }
+
+                // Positive A to Negative B (if both have capacity)
+                // All H2O can have up to 2 positive bonds and 3 negative bonds
+                if pos_bonds < 2 && b_neg_bonds < 3 {
+                    let bond_dist = pos_pole_a.distance(neg_pole_b);
+
+                    // Check if either molecule has exactly 2 bonds - if so, use shorter breaking distance
+                    let total_a = if let Some(p) = &self.protons[idx_a] { p.water_h_bonds().len() } else { 0 };
+                    let total_b = if let Some(p) = &self.protons[idx_b] { p.water_h_bonds().len() } else { 0 };
+                    let max_bond_dist = if total_a == 2 || total_b == 2 {
+                        proton::WATER_2BOND_BREAKING_DISTANCE
+                    } else {
+                        proton::WATER_H_BOND_RANGE
+                    };
+
+                    if bond_dist < max_bond_dist {
+                        if let Some(proton_a) = &mut self.protons[idx_a] {
+                            proton_a.add_water_h_bond(idx_b, proton::WATER_H_BOND_REST_LENGTH);
+                            pos_bonds += 1;
+                        }
+                        if let Some(proton_b) = &mut self.protons[idx_b] {
+                            proton_b.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
+                        }
+                    }
+                }
+            }
+        }
+
+        // PHASE 4.5: Hexagonal ice crystal optimization
+        // For H2O with 4-5 bonds, check if neighbors form a perfect hexagon
+        // If yes, rearrange bonds to prioritize hexagonal pattern for beautiful snowflake crystals
+        for i in 0..water_molecules.len() {
+            let (idx_a, pos_a, _, _, _) = water_molecules[i];
+
+            if let Some(proton_a) = &self.protons[idx_a] {
+                let bond_count = proton_a.water_h_bonds().len();
+
+                // Only optimize if we have 4-5 bonds (potential hexagon core)
+                if bond_count >= 4 {
+                    // Find 6 closest H2O neighbors
+                    let mut neighbors: Vec<(usize, f32, f32)> = Vec::new(); // (index, distance, angle)
+
+                    for j in 0..water_molecules.len() {
+                        if i == j {
+                            continue;
+                        }
+                        let (idx_b, pos_b, _, _, _) = water_molecules[j];
+                        let delta = pos_b - pos_a;
+                        let dist = delta.length();
+
+                        if dist < proton::WATER_H_BOND_RANGE * 1.5 {
+                            let angle = delta.y.atan2(delta.x);
+                            neighbors.push((idx_b, dist, angle));
+                        }
+                    }
+
+                    // Sort by distance to get closest 6
+                    neighbors.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                    if neighbors.len() >= 6 {
+                        neighbors.truncate(6);
+                    }
+
+                    // Check if these form a hexagonal pattern
+                    if neighbors.len() == 6 {
+                        // Sort by angle
+                        neighbors.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+
+                        // Check if angles are approximately 60 degrees apart
+                        let mut is_hexagon = true;
+                        for k in 0..6 {
+                            let next_k = (k + 1) % 6;
+                            let mut angle_diff = neighbors[next_k].2 - neighbors[k].2;
+
+                            // Normalize angle difference to [0, 2π]
+                            if angle_diff < 0.0 {
+                                angle_diff += 2.0 * std::f32::consts::PI;
+                            }
+
+                            // Check if close to 60 degrees (π/3 radians), allow 20 degree tolerance
+                            let expected_angle = std::f32::consts::PI / 3.0; // 60 degrees
+                            let tolerance = 0.35; // ~20 degrees in radians
+
+                            if (angle_diff - expected_angle).abs() > tolerance {
+                                is_hexagon = false;
+                                break;
+                            }
+                        }
+
+                        // If hexagonal, clear bonds and rebond to these 6 neighbors (max 5 bonds)
+                        if is_hexagon {
+                            if let Some(p) = &mut self.protons[idx_a] {
+                                p.clear_water_h_bonds();
+                            }
+
+                            // Bond to 5 of the 6 hexagonal neighbors
+                            for k in 0..5.min(neighbors.len()) {
+                                if let Some(p) = &mut self.protons[idx_a] {
+                                    p.add_water_h_bond(neighbors[k].0, proton::WATER_H_BOND_REST_LENGTH);
+                                }
+                                // Also bond the neighbor back to us
+                                if let Some(p) = &mut self.protons[neighbors[k].0] {
+                                    if !p.water_h_bonds().contains(&idx_a) {
+                                        p.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // PHASE 5: Check for compression and freeze H2O into ice
+        // When H2O molecules form 3+ bonds (all compressed), they freeze into ice
+        // 0-2 bonds = liquid, 3-5 bonds = frozen and stationary
+        for (idx, pos, vel, _, _) in &water_molecules {
+            if let Some(proton) = &self.protons[*idx] {
+                let speed = vel.length();
+
+                // Check if should melt (moving too fast)
+                if proton.is_water_frozen() && speed > proton::WATER_ICE_MELT_SPEED {
+                    // Unfreeze (melt)
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_water_frozen(false);
+                    }
+                    continue;
+                }
+
+                // Check if should freeze
+                let bonds = proton.water_h_bonds();
+                if bonds.len() >= proton::WATER_ICE_MIN_NEIGHBORS {
+                    // Check if all bonded neighbors are within compression distance
+                    let mut all_compressed = true;
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_h2o() {
+                                let dist = pos.distance(partner.position());
+                                if dist > proton::WATER_ICE_COMPRESSION_DISTANCE {
+                                    all_compressed = false;
+                                    break;
+                                }
+                            } else {
+                                all_compressed = false;
+                                break;
+                            }
+                        } else {
+                            all_compressed = false;
+                            break;
+                        }
+                    }
+
+                    // Freeze if all bonds are compressed
+                    if all_compressed && !proton.is_water_frozen() {
+                        if let Some(p) = &mut self.protons[*idx] {
+                            p.set_water_frozen(true);
+                        }
+                    } else if !all_compressed && proton.is_water_frozen() {
+                        // Unfreeze if bonds are no longer compressed
+                        if let Some(p) = &mut self.protons[*idx] {
+                            p.set_water_frozen(false);
+                        }
+                    }
+                } else {
+                    // Not enough bonds - cannot be frozen
+                    if proton.is_water_frozen() {
+                        if let Some(p) = &mut self.protons[*idx] {
+                            p.set_water_frozen(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // PHASE 6: Lock H2O molecules in place if they have 3-5 frozen bonds
+        // This makes the ice completely rigid and stationary for more ice formation
+        // 3 bonds = locked, 4 bonds = locked, 5 bonds = locked (all frozen)
+        // 0-2 bonds = mobile (liquid H2O)
+        for (idx, pos, _, _, _) in &water_molecules {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.is_water_frozen() {
+                    // Count how many bonds are to other frozen H2O molecules
+                    let mut frozen_bond_count = 0;
+                    for bond_idx in proton.water_h_bonds() {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_h2o() && partner.is_water_frozen() {
+                                frozen_bond_count += 1;
+                            }
+                        }
+                    }
+
+                    // Lock completely in place if 3, 4, or 5 frozen bonds (rigid ice)
+                    // More ice, less movement!
+                    if frozen_bond_count >= 3 {
+                        if let Some(p) = &mut self.protons[*idx] {
+                            p.set_velocity(Vec2::ZERO);
+                        }
+                    }
+                    // If only 0-2 frozen bonds, allow movement (liquid)
+                }
+            }
+        }
+
+        // PHASE 6.5: Apply repulsion from 3-5 bonded frozen H2O to non-bonded H2O
+        // This prevents ice from "folding" and trapping extra molecules inside the lattice
+        // 3, 4, and 5 bonded frozen H2O all repel non-bonded H2O to push them to the edges
+        let mut ice_repulsion_forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+
+        for i in 0..water_molecules.len() {
+            let (idx_a, pos_a, _, _, _) = water_molecules[i];
+
+            if let Some(proton_a) = &self.protons[idx_a] {
+                // Check if this is a frozen H2O with 3, 4, or 5 bonds
+                let bond_count = proton_a.water_h_bonds().len();
+                if proton_a.is_water_frozen() && bond_count >= 3 {
+                    let bonded_indices = proton_a.water_h_bonds().clone();
+
+                    // Repel all nearby H2O that are NOT in our bonded partner list
+                    // This pushes trapped molecules to the outer edges
+                    for j in 0..water_molecules.len() {
+                        if i == j {
+                            continue;
+                        }
+
+                        let (idx_b, pos_b, _, _, _) = water_molecules[j];
+
+                        // Skip if this H2O is in our bonded partner list
+                        if bonded_indices.contains(&idx_b) {
+                            continue;
+                        }
+
+                        let delta = pos_b - pos_a;
+                        let dist = delta.length();
+
+                        // Apply strong repulsion if within range
+                        if dist < proton::WATER_ICE_REPULSION_RANGE && dist > 0.1 {
+                            let dir = delta / dist;
+                            let force_magnitude = proton::WATER_ICE_REPULSION_STRENGTH * (1.0 - dist / proton::WATER_ICE_REPULSION_RANGE);
+                            ice_repulsion_forces[idx_b] += dir * force_magnitude;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply the repulsion forces
+        for (idx, _, _, mass, _) in &water_molecules {
+            let force = ice_repulsion_forces[*idx];
+            if force.length() > 0.01 {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    let acc = force / *mass;
+                    proton.add_velocity(acc * delta_time);
+                }
+            }
+        }
+
+        // PHASE 7: Apply spring forces to bonded water molecules
+        // Use stronger forces and shorter rest length for frozen (ice) bonds
+        let mut bonded_pairs: Vec<(usize, usize, Vec2, Vec2, f32, f32, f32, bool)> = Vec::new();
+
+        for (idx, pos, _, mass, _) in &water_molecules {
+            if let Some(proton) = &self.protons[*idx] {
+                for (bond_idx, partner_idx) in proton.water_h_bonds().iter().enumerate() {
+                    // Only process each pair once
+                    if *partner_idx > *idx {
+                        if let Some(partner) = &self.protons[*partner_idx] {
+                            if partner.is_alive() && partner.is_h2o() {
+                                // Check if both molecules are frozen (ice bond)
+                                let both_frozen = proton.is_water_frozen() && partner.is_water_frozen();
+                                let rest_length = proton.water_bond_rest_lengths()[bond_idx];
+                                bonded_pairs.push((
+                                    *idx,
+                                    *partner_idx,
+                                    *pos,
+                                    partner.position(),
+                                    *mass,
+                                    partner.mass(),
+                                    rest_length,
+                                    both_frozen,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply forces and check for breaking
+        for (idx1, idx2, pos1, pos2, m1, m2, rest_length, is_frozen) in bonded_pairs {
+            let delta = pos2 - pos1;
+            let dist = delta.length();
+
+            // Check if bond should break
+            if dist > proton::WATER_H_BOND_BREAKING_DISTANCE {
+                continue; // Bonds will be rebuilt next frame
+            }
+
+            // Apply spring force - use stronger force and different rest length for frozen bonds
+            if dist > 0.1 {
+                let (bond_strength, ice_rest_length) = if is_frozen {
+                    (proton::WATER_ICE_FROZEN_BOND_STRENGTH, proton::WATER_ICE_FROZEN_REST_LENGTH)
+                } else {
+                    (proton::WATER_H_BOND_STRENGTH, rest_length)
+                };
+
+                let displacement = dist - ice_rest_length;
+                let force_magnitude = displacement * bond_strength;
+                let dir = delta / dist;
+                let force = dir * force_magnitude;
+
+                // For frozen bonds, apply forces more strongly to lock molecules in place
+                // For liquid bonds, apply normal forces
+                if let Some(p1) = &mut self.protons[idx1] {
+                    let acc1 = force / m1;
+                    p1.add_velocity(acc1 * delta_time);
+                }
+                if let Some(p2) = &mut self.protons[idx2] {
+                    let acc2 = -force / m2;
+                    p2.add_velocity(acc2 * delta_time);
+                }
+            }
+        }
+
+        // PHASE 8 (FINAL): Lock 3-5 bonded frozen H2O velocity to ZERO
+        // This MUST happen at the end, after ALL forces have been applied
+        // This ensures 3-5 bonded H2O absolutely cannot move, no matter what forces push it
+        for (idx, _, _, _, _) in &water_molecules {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.is_water_frozen() && proton.water_h_bonds().len() >= 3 {
+                    // Lock velocity - no movement allowed!
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_velocity(Vec2::ZERO);
+                    }
+                }
             }
         }
     }
@@ -1417,6 +1945,72 @@ impl ProtonManager {
             }
         }
 
+        // BONDING CASE: C12 + He4 → O16 bonded pair (alpha capture on carbon)
+        // This MUST happen before Ne20 formation check!
+        // Collect all unbonded C12 and He4 particles
+        let mut c12_particles: Vec<(usize, Vec2, Vec2, f32)> = Vec::new();
+        let mut he4_particles: Vec<(usize, Vec2, Vec2, f32)> = Vec::new();
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if proton.is_alive() && !proton.is_oxygen16_bonded() {
+                    if proton.is_stable_carbon12() {
+                        c12_particles.push((i, proton.position(), proton.velocity(), proton.radius()));
+                    } else if proton.is_stable_helium4() {
+                        he4_particles.push((i, proton.position(), proton.velocity(), proton.radius()));
+                    }
+                }
+            }
+        }
+
+        // Check all C12-He4 pairs for bonding
+        for (c12_idx, c12_pos, c12_vel, c12_r) in &c12_particles {
+            for (he4_idx, he4_pos, he4_vel, he4_r) in &he4_particles {
+                let dist_sq = c12_pos.distance_squared(*he4_pos);
+                let collision_dist = c12_r + he4_r;
+
+                // Check if colliding
+                if dist_sq <= collision_dist * collision_dist {
+                    let dist = dist_sq.sqrt();
+
+                    // Calculate relative velocity
+                    let rel_vel = *c12_vel - *he4_vel;
+                    let rel_speed = rel_vel.length();
+
+                    // Check velocity threshold
+                    if rel_speed >= proton::OXYGEN16_CAPTURE_VELOCITY_THRESHOLD {
+                        // BONDING OCCURS!
+                        // Calculate bond rest length
+                        let bond_rest_length = dist.max(1.0);
+
+                        // Calculate midpoint for energy wave
+                        let midpoint = (*c12_pos + *he4_pos) / 2.0;
+
+                        // Set bonding on both particles
+                        if let Some(c12) = &mut self.protons[*c12_idx] {
+                            c12.set_oxygen16_bonded(true);
+                            c12.set_oxygen_bond_partner(Some(*he4_idx));
+                            c12.set_oxygen_bond_rest_length(bond_rest_length);
+                        }
+                        if let Some(he4) = &mut self.protons[*he4_idx] {
+                            he4.set_oxygen16_bonded(true);
+                            he4.set_oxygen_bond_partner(Some(*c12_idx));
+                            he4.set_oxygen_bond_rest_length(bond_rest_length);
+                        }
+
+                        // Spawn energy wave at bonding site (dark red to yellow, favoring dark red)
+                        use macroquad::rand::gen_range;
+                        let t: f32 = gen_range(0.0, 1.0);
+                        let t = t.powf(3.0);
+                        ring_manager.add_ring_with_color(midpoint, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
+
+                        // Only one bonding per update cycle
+                        return;
+                    }
+                }
+            }
+        }
+
         // FUSION CASE 5: Neon-20 formation - O16 bonded pair + He4 → Ne20
         // Collect all O16 bonded pairs
         let mut o16_pairs: Vec<(usize, usize, Vec2, f32, f32, f32, Vec2, Vec2)> = Vec::new();
@@ -1448,11 +2042,11 @@ impl ProtonManager {
             }
         }
 
-        // Collect all He4 particles
+        // Collect all He4 particles (excluding those already bonded in O16 pairs)
         let mut he4_for_neon: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
         for i in 0..self.protons.len() {
             if let Some(proton) = &self.protons[i] {
-                if proton.is_alive() && proton.is_stable_helium4() {
+                if proton.is_alive() && proton.is_stable_helium4() && !proton.is_oxygen16_bonded() {
                     he4_for_neon.push((
                         i,
                         proton.position(),
@@ -1544,11 +2138,11 @@ impl ProtonManager {
             }
         }
 
-        // Reuse He4 particles from earlier (or collect them again)
+        // Collect He4 particles (excluding those already bonded in O16 pairs)
         let mut he4_for_mg: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
         for i in 0..self.protons.len() {
             if let Some(proton) = &self.protons[i] {
-                if proton.is_alive() && proton.is_stable_helium4() {
+                if proton.is_alive() && proton.is_stable_helium4() && !proton.is_oxygen16_bonded() {
                     he4_for_mg.push((
                         i,
                         proton.position(),
@@ -1622,11 +2216,11 @@ impl ProtonManager {
             }
         }
 
-        // Reuse He4 particles
+        // Collect He4 particles (excluding those already bonded in O16 pairs)
         let mut he4_for_si: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
         for i in 0..self.protons.len() {
             if let Some(proton) = &self.protons[i] {
-                if proton.is_alive() && proton.is_stable_helium4() {
+                if proton.is_alive() && proton.is_stable_helium4() && !proton.is_oxygen16_bonded() {
                     he4_for_si.push((
                         i,
                         proton.position(),
@@ -1700,11 +2294,11 @@ impl ProtonManager {
             }
         }
 
-        // Reuse He4 particles
+        // Collect He4 particles (excluding those already bonded in O16 pairs)
         let mut he4_for_s: Vec<(usize, Vec2, Vec2, f32, f32, f32)> = Vec::new();
         for i in 0..self.protons.len() {
             if let Some(proton) = &self.protons[i] {
-                if proton.is_alive() && proton.is_stable_helium4() {
+                if proton.is_alive() && proton.is_stable_helium4() && !proton.is_oxygen16_bonded() {
                     he4_for_s.push((
                         i,
                         proton.position(),
@@ -1754,71 +2348,6 @@ impl ProtonManager {
                         let t = t.powf(3.0);
                         ring_manager.add_ring_with_color(center_of_mass, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
 
-                        return;
-                    }
-                }
-            }
-        }
-
-        // BONDING CASE: C12 + He4 → O16 bonded pair (alpha capture on carbon)
-        // Collect all unbonded C12 and He4 particles
-        let mut c12_particles: Vec<(usize, Vec2, Vec2, f32)> = Vec::new();
-        let mut he4_particles: Vec<(usize, Vec2, Vec2, f32)> = Vec::new();
-
-        for i in 0..self.protons.len() {
-            if let Some(proton) = &self.protons[i] {
-                if proton.is_alive() && !proton.is_oxygen16_bonded() {
-                    if proton.is_stable_carbon12() {
-                        c12_particles.push((i, proton.position(), proton.velocity(), proton.radius()));
-                    } else if proton.is_stable_helium4() {
-                        he4_particles.push((i, proton.position(), proton.velocity(), proton.radius()));
-                    }
-                }
-            }
-        }
-
-        // Check all C12-He4 pairs for bonding
-        for (c12_idx, c12_pos, c12_vel, c12_r) in &c12_particles {
-            for (he4_idx, he4_pos, he4_vel, he4_r) in &he4_particles {
-                let dist_sq = c12_pos.distance_squared(*he4_pos);
-                let collision_dist = c12_r + he4_r;
-
-                // Check if colliding
-                if dist_sq <= collision_dist * collision_dist {
-                    let dist = dist_sq.sqrt();
-
-                    // Calculate relative velocity
-                    let rel_vel = *c12_vel - *he4_vel;
-                    let rel_speed = rel_vel.length();
-
-                    // Check velocity threshold
-                    if rel_speed >= proton::OXYGEN16_CAPTURE_VELOCITY_THRESHOLD {
-                        // BONDING OCCURS!
-                        // Calculate bond rest length
-                        let bond_rest_length = dist.max(1.0);
-
-                        // Calculate midpoint for energy wave
-                        let midpoint = (*c12_pos + *he4_pos) / 2.0;
-
-                        // Set bonding on both particles
-                        if let Some(c12) = &mut self.protons[*c12_idx] {
-                            c12.set_oxygen16_bonded(true);
-                            c12.set_oxygen_bond_partner(Some(*he4_idx));
-                            c12.set_oxygen_bond_rest_length(bond_rest_length);
-                        }
-                        if let Some(he4) = &mut self.protons[*he4_idx] {
-                            he4.set_oxygen16_bonded(true);
-                            he4.set_oxygen_bond_partner(Some(*c12_idx));
-                            he4.set_oxygen_bond_rest_length(bond_rest_length);
-                        }
-
-                        // Spawn energy wave at bonding site (dark red to yellow, favoring dark red)
-                        use macroquad::rand::gen_range;
-                        let t: f32 = gen_range(0.0, 1.0);
-                        let t = t.powf(3.0);
-                        ring_manager.add_ring_with_color(midpoint, Color::new(0.17 + 0.83*t, 0.8*t, 0.0, 1.0));
-
-                        // Only one bonding per update cycle
                         return;
                     }
                 }
@@ -2439,23 +2968,33 @@ impl ProtonManager {
                     continue;
                 }
 
-                // Only track simple stable elements, not compounds
-                let element = if proton.is_stable_hydrogen() {
-                    Some("H1")
-                } else if proton.charge() == 1 && proton.neutron_count() == 2 {
-                    Some("He3")
-                } else if proton.charge() == 2 && proton.neutron_count() == 2 {
-                    Some("He4")
-                } else if proton.charge() == 6 && proton.neutron_count() == 6 {
-                    Some("C12")
-                } else if proton.is_neon20() {
-                    Some("Ne20")
-                } else if proton.is_magnesium24() {
-                    Some("Mg24")
-                } else if proton.is_silicon28() {
-                    Some("Si28")
+                // Track all stable elements and compounds (not O16 bonded pairs)
+                let element = if proton.is_sih4() {
+                    Some("SiH4")
+                } else if proton.is_ch4() {
+                    Some("CH4")
+                } else if proton.is_h2s() {
+                    Some("H2S")
+                } else if proton.is_mgh2() {
+                    Some("MgH2")
+                } else if proton.is_h2o() {
+                    Some("H2O")
                 } else if proton.is_sulfur32() {
                     Some("S32")
+                } else if proton.is_silicon28() {
+                    Some("Si28")
+                } else if proton.is_magnesium24() {
+                    Some("Mg24")
+                } else if proton.is_neon20() {
+                    Some("Ne20")
+                } else if proton.charge() == 6 && proton.neutron_count() == 6 {
+                    Some("C12")
+                } else if proton.charge() == 2 && proton.neutron_count() == 2 {
+                    Some("He4")
+                } else if proton.charge() == 1 && proton.neutron_count() == 2 {
+                    Some("He3")
+                } else if proton.is_stable_hydrogen() {
+                    Some("H1")
                 } else {
                     None
                 };
@@ -2540,6 +3079,46 @@ impl ProtonManager {
                         let mut p = Proton::new(position, velocity, Color::from_rgba(220, 220, 80, 255), 32.0, 16);
                         p.set_neutron_count(16);
                         p.set_sulfur32(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "H2O" => {
+                        // Water molecule (O16 + 2H)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(40, 100, 180, 255), 18.0, 8);
+                        p.set_neutron_count(10);
+                        p.set_h2o(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "H2S" => {
+                        // Hydrogen Sulfide (S32 + 2H)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(200, 220, 80, 255), 34.0, 18);
+                        p.set_neutron_count(18);
+                        p.set_h2s(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "MgH2" => {
+                        // Magnesium Hydride (Mg24 + 2H)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(180, 180, 190, 255), 26.0, 14);
+                        p.set_neutron_count(14);
+                        p.set_mgh2(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "CH4" => {
+                        // Methane (C12 + 4H)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(120, 200, 150, 255), 16.0, 10);
+                        p.set_neutron_count(10);
+                        p.set_ch4(true);
+                        p.set_max_lifetime(pc::INFINITE_LIFETIME);
+                        p
+                    },
+                    "SiH4" => {
+                        // Silane (Si28 + 4H)
+                        let mut p = Proton::new(position, velocity, Color::from_rgba(220, 100, 50, 255), 32.0, 18);
+                        p.set_neutron_count(18);
+                        p.set_sih4(true);
                         p.set_max_lifetime(pc::INFINITE_LIFETIME);
                         p
                     },

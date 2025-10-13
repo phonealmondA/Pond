@@ -31,6 +31,11 @@ enum ElementType {
     Mg24,
     Si28,
     S32,
+    H2O,
+    H2S,
+    MgH2,
+    CH4,
+    SiH4,
 }
 
 impl ElementType {
@@ -44,6 +49,11 @@ impl ElementType {
             ElementType::Mg24 => "Mg24",
             ElementType::Si28 => "Si28",
             ElementType::S32 => "S32",
+            ElementType::H2O => "H2O",
+            ElementType::H2S => "H2S",
+            ElementType::MgH2 => "MgH2",
+            ElementType::CH4 => "CH4",
+            ElementType::SiH4 => "SiH4",
         }
     }
 
@@ -57,6 +67,11 @@ impl ElementType {
             ElementType::Mg24 => Color::from_rgba(200, 200, 220, 255),
             ElementType::Si28 => Color::from_rgba(160, 130, 90, 255),
             ElementType::S32 => Color::from_rgba(220, 220, 80, 255),
+            ElementType::H2O => Color::from_rgba(40, 100, 180, 255),
+            ElementType::H2S => Color::from_rgba(200, 220, 80, 255),
+            ElementType::MgH2 => Color::from_rgba(180, 180, 190, 255),
+            ElementType::CH4 => Color::from_rgba(120, 200, 150, 255),
+            ElementType::SiH4 => Color::from_rgba(220, 100, 50, 255),
         }
     }
 
@@ -70,6 +85,11 @@ impl ElementType {
             ElementType::Mg24,
             ElementType::Si28,
             ElementType::S32,
+            ElementType::H2O,
+            ElementType::H2S,
+            ElementType::MgH2,
+            ElementType::CH4,
+            ElementType::SiH4,
         ]
     }
 }
@@ -279,6 +299,11 @@ async fn main() {
                 "Mg24" => Some(ElementType::Mg24),
                 "Si28" => Some(ElementType::Si28),
                 "S32" => Some(ElementType::S32),
+                "H2O" => Some(ElementType::H2O),
+                "H2S" => Some(ElementType::H2S),
+                "MgH2" => Some(ElementType::MgH2),
+                "CH4" => Some(ElementType::CH4),
+                "SiH4" => Some(ElementType::SiH4),
                 _ => None,
             };
             if let Some(et) = element_type {

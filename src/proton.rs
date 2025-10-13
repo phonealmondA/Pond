@@ -44,8 +44,12 @@ pub struct Proton {
     oxygen_bond_partner: Option<usize>, // Index of bonded partner particle
     oxygen_bond_rest_length: f32, // Rest length of O16 bond
 
-    // Water molecule flag
+    // Water molecule flag and hydrogen bonding system
     is_h2o: bool,
+    water_polar_angle: f32, // Angle for polar orientation (0-2π)
+    water_h_bonds: Vec<usize>, // Indices of hydrogen-bonded water molecules (max 3)
+    water_bond_rest_lengths: Vec<f32>, // Rest lengths for each hydrogen bond
+    is_water_frozen: bool, // True when H2O is compressed into ice (frozen state)
 
     // Neon-20 flag
     is_neon20: bool,
@@ -101,6 +105,10 @@ impl Proton {
             oxygen_bond_partner: None,
             oxygen_bond_rest_length: 0.0,
             is_h2o: false,
+            water_polar_angle: 0.0,
+            water_h_bonds: Vec::new(),
+            water_bond_rest_lengths: Vec::new(),
+            is_water_frozen: false,
             is_neon20: false,
             is_magnesium24: false,
             is_silicon28: false,
@@ -471,6 +479,25 @@ impl Proton {
     // Water molecule getters/setters
     pub fn is_h2o(&self) -> bool { self.is_h2o }
     pub fn set_h2o(&mut self, is_water: bool) { self.is_h2o = is_water; }
+    pub fn water_polar_angle(&self) -> f32 { self.water_polar_angle }
+    pub fn set_water_polar_angle(&mut self, angle: f32) { self.water_polar_angle = angle; }
+    pub fn water_h_bonds(&self) -> &Vec<usize> { &self.water_h_bonds }
+    pub fn water_h_bonds_mut(&mut self) -> &mut Vec<usize> { &mut self.water_h_bonds }
+    pub fn water_bond_rest_lengths(&self) -> &Vec<f32> { &self.water_bond_rest_lengths }
+    pub fn add_water_h_bond(&mut self, index: usize, rest_length: f32) {
+        // All H2O can form up to 5 bonds (regardless of liquid or frozen state)
+        // 0-3 bonds = liquid, 4-5 bonds = frozen
+        if !self.water_h_bonds.contains(&index) && self.water_h_bonds.len() < pc::WATER_ICE_MAX_BONDS {
+            self.water_h_bonds.push(index);
+            self.water_bond_rest_lengths.push(rest_length);
+        }
+    }
+    pub fn clear_water_h_bonds(&mut self) {
+        self.water_h_bonds.clear();
+        self.water_bond_rest_lengths.clear();
+    }
+    pub fn is_water_frozen(&self) -> bool { self.is_water_frozen }
+    pub fn set_water_frozen(&mut self, frozen: bool) { self.is_water_frozen = frozen; }
 
     // Neon-20 getters/setters
     pub fn is_neon20(&self) -> bool { self.is_neon20 }
