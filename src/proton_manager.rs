@@ -949,12 +949,13 @@ impl ProtonManager {
         }
     }
 
-    /// Update water hydrogen bonds - polar molecules form weak triangular clusters
+    /// Update water hydrogen bonds - simple geometric ice formation
+    /// 3 bonds = triangles, 4 bonds = squares, 5 bonds = hexagons
     fn update_water_hydrogen_bonds(&mut self, delta_time: f32) {
         use std::f32::consts::PI;
 
-        // PHASE 1: Collect all H2O molecules and initialize polar angles if needed
-        let mut water_molecules: Vec<(usize, Vec2, Vec2, f32, f32)> = Vec::new();
+        // PHASE 1: Collect all H2O molecules
+        let mut water_molecules: Vec<(usize, Vec2, Vec2)> = Vec::new();
 
         for i in 0..self.protons.len() {
             if let Some(proton) = &self.protons[i] {
@@ -963,472 +964,588 @@ impl ProtonManager {
                         i,
                         proton.position(),
                         proton.velocity(),
-                        proton.mass(),
-                        proton.water_polar_angle(),
                     ));
                 }
             }
         }
 
-        // PHASE 2: Initialize polar angles for new water molecules (random orientation)
-        // Also check for evaporation (too much speed breaks bonds)
-        for (idx, _, vel, _, angle) in &water_molecules {
-            // Check if moving too fast (evaporation)
+        // PHASE 2: Check for evaporation (too much speed breaks bonds)
+        for (idx, _, vel) in &water_molecules {
             let speed = vel.length();
             if speed > proton::WATER_EVAPORATION_SPEED {
                 // Moving too fast - break all bonds (evaporation)
                 if let Some(proton) = &mut self.protons[*idx] {
                     proton.clear_water_h_bonds();
-                }
-                continue;
-            }
-
-            if *angle == 0.0 {
-                // Initialize with velocity direction + some randomness
-                let vel_angle = vel.y.atan2(vel.x);
-                let random_offset = (rand::gen_range(0.0, 1.0) - 0.5) * PI;
-                let new_angle = vel_angle + random_offset;
-
-                if let Some(proton) = &mut self.protons[*idx] {
-                    proton.set_water_polar_angle(new_angle);
+                    proton.set_water_frozen(false);
                 }
             }
         }
 
         // PHASE 3: Clear existing bonds (we'll rebuild them each frame)
-        for (idx, _, _, _, _) in &water_molecules {
+        for (idx, _, _) in &water_molecules {
             if let Some(proton) = &mut self.protons[*idx] {
                 proton.clear_water_h_bonds();
             }
         }
 
-        // PHASE 4: Form new bonds based on polarity
+        // PHASE 4: Form bonds with angular constraints for perfect hexagonal geometry
+        // This enforces 60° spacing between neighbors for perfect hexagons
         for i in 0..water_molecules.len() {
-            let (idx_a, pos_a, _, _, angle_a) = water_molecules[i];
+            let (idx_a, pos_a, _) = water_molecules[i];
 
-            // Calculate pole positions for molecule A
-            // Negative pole at angle, positive pole at angle + PI
-            let neg_pole_a = Vec2::new(
-                pos_a.x + angle_a.cos() * 30.0,
-                pos_a.y + angle_a.sin() * 30.0,
-            );
-            let pos_pole_a = Vec2::new(
-                pos_a.x + (angle_a + PI).cos() * 30.0,
-                pos_a.y + (angle_a + PI).sin() * 30.0,
-            );
+            // Get current bonds and their angles (clone to avoid borrow issues)
+            let existing_bonds = if let Some(proton_a) = &self.protons[idx_a] {
+                proton_a.water_h_bonds().clone()
+            } else {
+                continue;
+            };
 
-            // Count existing bonds from negative and positive sides
-            // All H2O can have up to 5 bonds total (3 neg + 2 pos)
-            // 0-2 bonds = liquid, 3-5 bonds = frozen and stationary
-            let mut neg_bonds = 0;
-            let mut pos_bonds = 0;
-
-            if let Some(proton_a) = &self.protons[idx_a] {
-                let total_bonds = proton_a.water_h_bonds().len();
-                // Layout: 3 negative bonds first, then 2 positive bonds
-                neg_bonds = total_bonds.min(3);
-                pos_bonds = if total_bonds > 3 {
-                    (total_bonds - 3).min(2)
-                } else {
-                    0
-                };
+            // Skip if already at max bonds
+            if existing_bonds.len() >= proton::WATER_ICE_MAX_BONDS {
+                continue;
             }
 
-            // Check nearby water molecules
-            for j in (i + 1)..water_molecules.len() {
-                let (idx_b, pos_b, _, _, angle_b) = water_molecules[j];
+            // Calculate existing bond angles
+            let mut existing_angles: Vec<f32> = Vec::new();
+            for bond_idx in &existing_bonds {
+                if let Some(partner) = &self.protons[*bond_idx] {
+                    if partner.is_alive() && partner.is_h2o() {
+                        let delta = partner.position() - pos_a;
+                        let angle = delta.y.atan2(delta.x);
+                        existing_angles.push(angle);
+                    }
+                }
+            }
 
-                let dist = pos_a.distance(pos_b);
-                if dist > proton::WATER_H_BOND_RANGE {
+            // Find potential neighbors with angular positions
+            // Prioritize frozen neighbors to enable seed crystal growth
+            let mut neighbors: Vec<(usize, f32, f32, bool)> = Vec::new(); // (index, distance, angle, is_frozen)
+
+            for j in 0..water_molecules.len() {
+                if i == j {
+                    continue;
+                }
+                let (idx_b, pos_b, _) = water_molecules[j];
+                let delta = pos_b - pos_a;
+                let dist = delta.length();
+
+                if dist < proton::WATER_H_BOND_RANGE && dist > 20.0 {  // Minimum distance to prevent overlap
+                    let angle = delta.y.atan2(delta.x);
+                    let is_frozen = if let Some(p) = &self.protons[idx_b] {
+                        p.is_water_frozen()
+                    } else {
+                        false
+                    };
+                    neighbors.push((idx_b, dist, angle, is_frozen));
+                }
+            }
+
+            // Sort by priority: frozen molecules first, then by distance
+            neighbors.sort_by(|a, b| {
+                match (a.3, b.3) {
+                    (true, false) => std::cmp::Ordering::Less,   // Frozen comes first
+                    (false, true) => std::cmp::Ordering::Greater, // Non-frozen comes later
+                    _ => a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal), // Same frozen status, sort by distance
+                }
+            });
+
+            // For each potential neighbor, check if it fits into a valid hexagonal position
+            for (neighbor_idx, dist, neighbor_angle, _is_frozen) in neighbors {
+                // Check if neighbor has capacity
+                let neighbor_bonds = if let Some(p) = &self.protons[neighbor_idx] {
+                    p.water_h_bonds().len()
+                } else {
+                    continue;
+                };
+
+                if neighbor_bonds >= proton::WATER_ICE_MAX_BONDS {
                     continue;
                 }
 
-                // Calculate pole positions for molecule B
-                let neg_pole_b = Vec2::new(
-                    pos_b.x + angle_b.cos() * 30.0,
-                    pos_b.y + angle_b.sin() * 30.0,
-                );
-                let pos_pole_b = Vec2::new(
-                    pos_b.x + (angle_b + PI).cos() * 30.0,
-                    pos_b.y + (angle_b + PI).sin() * 30.0,
-                );
-
-                // Check bond limits for molecule B
-                // All H2O can have up to 3 negative bonds, 2 positive bonds
-                let b_neg_bonds = if let Some(p) = &self.protons[idx_b] {
-                    let total = p.water_h_bonds().len();
-                    total.min(3) // All H2O can have up to 3 negative bonds
-                } else {
-                    0
-                };
-                let b_pos_bonds = if let Some(p) = &self.protons[idx_b] {
-                    let total = p.water_h_bonds().len();
-                    if total > 3 {
-                        (total - 3).min(2) // 2 positive bonds after 3 negative
-                    } else {
-                        0
-                    }
-                } else {
-                    0
-                };
-
-                // Try to form bonds based on polarity attraction
-                // Negative A to Positive B (if both have capacity)
-                // All H2O can have up to 3 negative bonds
-                if neg_bonds < 3 && b_pos_bonds < 2 {
-                    let bond_dist = neg_pole_a.distance(pos_pole_b);
-
-                    // Check if either molecule has exactly 2 bonds - if so, use shorter breaking distance
-                    let total_a = if let Some(p) = &self.protons[idx_a] { p.water_h_bonds().len() } else { 0 };
-                    let total_b = if let Some(p) = &self.protons[idx_b] { p.water_h_bonds().len() } else { 0 };
-                    let max_bond_dist = if total_a == 2 || total_b == 2 {
-                        proton::WATER_2BOND_BREAKING_DISTANCE
-                    } else {
-                        proton::WATER_H_BOND_RANGE
-                    };
-
-                    if bond_dist < max_bond_dist {
-                        if let Some(proton_a) = &mut self.protons[idx_a] {
-                            proton_a.add_water_h_bond(idx_b, proton::WATER_H_BOND_REST_LENGTH);
-                            neg_bonds += 1;
-                        }
-                        if let Some(proton_b) = &mut self.protons[idx_b] {
-                            proton_b.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
-                        }
-                        continue;
-                    }
-                }
-
-                // Positive A to Negative B (if both have capacity)
-                // All H2O can have up to 2 positive bonds and 3 negative bonds
-                if pos_bonds < 2 && b_neg_bonds < 3 {
-                    let bond_dist = pos_pole_a.distance(neg_pole_b);
-
-                    // Check if either molecule has exactly 2 bonds - if so, use shorter breaking distance
-                    let total_a = if let Some(p) = &self.protons[idx_a] { p.water_h_bonds().len() } else { 0 };
-                    let total_b = if let Some(p) = &self.protons[idx_b] { p.water_h_bonds().len() } else { 0 };
-                    let max_bond_dist = if total_a == 2 || total_b == 2 {
-                        proton::WATER_2BOND_BREAKING_DISTANCE
-                    } else {
-                        proton::WATER_H_BOND_RANGE
-                    };
-
-                    if bond_dist < max_bond_dist {
-                        if let Some(proton_a) = &mut self.protons[idx_a] {
-                            proton_a.add_water_h_bond(idx_b, proton::WATER_H_BOND_REST_LENGTH);
-                            pos_bonds += 1;
-                        }
-                        if let Some(proton_b) = &mut self.protons[idx_b] {
-                            proton_b.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
-                        }
-                    }
-                }
-            }
-        }
-
-        // PHASE 4.5: Hexagonal ice crystal optimization
-        // For H2O with 4-5 bonds, check if neighbors form a perfect hexagon
-        // If yes, rearrange bonds to prioritize hexagonal pattern for beautiful snowflake crystals
-        for i in 0..water_molecules.len() {
-            let (idx_a, pos_a, _, _, _) = water_molecules[i];
-
-            if let Some(proton_a) = &self.protons[idx_a] {
-                let bond_count = proton_a.water_h_bonds().len();
-
-                // Only optimize if we have 4-5 bonds (potential hexagon core)
-                if bond_count >= 4 {
-                    // Find 6 closest H2O neighbors
-                    let mut neighbors: Vec<(usize, f32, f32)> = Vec::new(); // (index, distance, angle)
-
-                    for j in 0..water_molecules.len() {
-                        if i == j {
-                            continue;
-                        }
-                        let (idx_b, pos_b, _, _, _) = water_molecules[j];
-                        let delta = pos_b - pos_a;
-                        let dist = delta.length();
-
-                        if dist < proton::WATER_H_BOND_RANGE * 1.5 {
-                            let angle = delta.y.atan2(delta.x);
-                            neighbors.push((idx_b, dist, angle));
-                        }
-                    }
-
-                    // Sort by distance to get closest 6
-                    neighbors.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                    if neighbors.len() >= 6 {
-                        neighbors.truncate(6);
-                    }
-
-                    // Check if these form a hexagonal pattern
-                    if neighbors.len() == 6 {
-                        // Sort by angle
-                        neighbors.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
-
-                        // Check if angles are approximately 60 degrees apart
-                        let mut is_hexagon = true;
-                        for k in 0..6 {
-                            let next_k = (k + 1) % 6;
-                            let mut angle_diff = neighbors[next_k].2 - neighbors[k].2;
-
-                            // Normalize angle difference to [0, 2π]
-                            if angle_diff < 0.0 {
-                                angle_diff += 2.0 * std::f32::consts::PI;
-                            }
-
-                            // Check if close to 60 degrees (π/3 radians), allow 20 degree tolerance
-                            let expected_angle = std::f32::consts::PI / 3.0; // 60 degrees
-                            let tolerance = 0.35; // ~20 degrees in radians
-
-                            if (angle_diff - expected_angle).abs() > tolerance {
-                                is_hexagon = false;
-                                break;
-                            }
-                        }
-
-                        // If hexagonal, clear bonds and rebond to these 6 neighbors (max 5 bonds)
-                        if is_hexagon {
-                            if let Some(p) = &mut self.protons[idx_a] {
-                                p.clear_water_h_bonds();
-                            }
-
-                            // Bond to 5 of the 6 hexagonal neighbors
-                            for k in 0..5.min(neighbors.len()) {
-                                if let Some(p) = &mut self.protons[idx_a] {
-                                    p.add_water_h_bond(neighbors[k].0, proton::WATER_H_BOND_REST_LENGTH);
-                                }
-                                // Also bond the neighbor back to us
-                                if let Some(p) = &mut self.protons[neighbors[k].0] {
-                                    if !p.water_h_bonds().contains(&idx_a) {
-                                        p.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // PHASE 5: Check for compression and freeze H2O into ice
-        // When H2O molecules form 3+ bonds (all compressed), they freeze into ice
-        // 0-2 bonds = liquid, 3-5 bonds = frozen and stationary
-        for (idx, pos, vel, _, _) in &water_molecules {
-            if let Some(proton) = &self.protons[*idx] {
-                let speed = vel.length();
-
-                // Check if should melt (moving too fast)
-                if proton.is_water_frozen() && speed > proton::WATER_ICE_MELT_SPEED {
-                    // Unfreeze (melt)
-                    if let Some(p) = &mut self.protons[*idx] {
-                        p.set_water_frozen(false);
-                    }
+                // Check if we already have this bond
+                if existing_bonds.contains(&neighbor_idx) {
                     continue;
                 }
 
-                // Check if should freeze
-                let bonds = proton.water_h_bonds();
-                if bonds.len() >= proton::WATER_ICE_MIN_NEIGHBORS {
-                    // Check if all bonded neighbors are within compression distance
-                    let mut all_compressed = true;
-                    for bond_idx in bonds {
-                        if let Some(partner) = &self.protons[*bond_idx] {
-                            if partner.is_alive() && partner.is_h2o() {
-                                let dist = pos.distance(partner.position());
-                                if dist > proton::WATER_ICE_COMPRESSION_DISTANCE {
-                                    all_compressed = false;
+                // Determine if this neighbor fits a valid hexagonal slot
+                let mut is_valid_position = false;
+
+                if existing_angles.is_empty() {
+                    // First bond - always accept closest neighbor
+                    is_valid_position = true;
+                } else {
+                    // Check if neighbor is at ~60° intervals from existing bonds
+                    // Ideal hexagonal positions: 0°, 60°, 120°, 180°, 240°, 300° relative to first bond
+                    let base_angle = existing_angles[0];
+
+                    // Calculate ideal hexagonal slots relative to base angle
+                    let ideal_slots: Vec<f32> = (0..6)
+                        .map(|i| base_angle + (i as f32) * PI / 3.0)
+                        .collect();
+
+                    // Check if neighbor angle matches any ideal slot
+                    for ideal_angle in ideal_slots {
+                        let mut angle_diff = (neighbor_angle - ideal_angle).abs();
+
+                        // Normalize to [-π, π]
+                        while angle_diff > PI {
+                            angle_diff -= 2.0 * PI;
+                        }
+
+                        if angle_diff.abs() < proton::WATER_ICE_ANGLE_TOLERANCE {
+                            // Also check it's not too close to existing bonds
+                            let mut too_close_to_existing = false;
+                            for existing_angle in &existing_angles {
+                                let mut diff = (neighbor_angle - existing_angle).abs();
+                                while diff > PI {
+                                    diff -= 2.0 * PI;
+                                }
+                                if diff.abs() < 0.3 {  // ~17° minimum separation
+                                    too_close_to_existing = true;
                                     break;
                                 }
-                            } else {
-                                all_compressed = false;
+                            }
+
+                            if !too_close_to_existing {
+                                is_valid_position = true;
                                 break;
                             }
-                        } else {
-                            all_compressed = false;
+                        }
+                    }
+                }
+
+                // Form bond if position is valid
+                if is_valid_position {
+                    if let Some(proton_a) = &mut self.protons[idx_a] {
+                        proton_a.add_water_h_bond(neighbor_idx, proton::WATER_H_BOND_REST_LENGTH);
+                        existing_angles.push(neighbor_angle);  // Update for next iteration
+                    }
+                    if let Some(proton_b) = &mut self.protons[neighbor_idx] {
+                        if !proton_b.water_h_bonds().contains(&idx_a) {
+                            proton_b.add_water_h_bond(idx_a, proton::WATER_H_BOND_REST_LENGTH);
+                        }
+                    }
+
+                    // Check if we've reached max bonds
+                    if existing_angles.len() >= proton::WATER_ICE_MAX_BONDS {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // PHASE 4.5: Apply strong alignment forces to enforce perfect geometric patterns
+        // 3 bonds = 120° spacing (triangle), 4 bonds = 90° spacing (square), 5 bonds = 60° spacing (hexagon)
+        for (idx, pos, _) in &water_molecules {
+            if let Some(proton) = &self.protons[*idx] {
+                let bonds = proton.water_h_bonds();
+                let bond_count = bonds.len();
+
+                // Only apply alignment for 3, 4, or 5 bonds
+                if bond_count < 3 || bond_count > 5 {
+                    continue;
+                }
+
+                // Get current positions and angles of bonded neighbors
+                let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                for bond_idx in bonds {
+                    if let Some(partner) = &self.protons[*bond_idx] {
+                        if partner.is_alive() && partner.is_h2o() {
+                            let partner_pos = partner.position();
+                            let delta = partner_pos - *pos;
+                            let dist = delta.length();
+                            let angle = delta.y.atan2(delta.x);
+                            neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                        }
+                    }
+                }
+
+                if neighbor_data.len() != bond_count {
+                    continue;
+                }
+
+                // Sort by angle
+                neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+
+                // Calculate ideal angle spacing and parameters based on bond count
+                // Reduced forces to prevent bonds from breaking
+                let (angle_spacing, target_distance, alignment_strength) = match bond_count {
+                    3 => (2.0 * PI / 3.0, 75.0, 40.0),  // 120° for triangle - gentle force
+                    4 => (PI / 2.0, 75.0, 30.0),        // 90° for square - very gentle force
+                    5 => (PI / 3.0, proton::WATER_ICE_FROZEN_REST_LENGTH, 25.0),  // 60° for hexagon - very gentle to prevent bond breaking
+                    _ => (0.0, 75.0, 40.0),
+                };
+
+                // Calculate ideal positions for each neighbor
+                let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                for i in 0..neighbor_data.len() {
+                    let (neighbor_idx, current_pos, current_dist, _current_angle) = neighbor_data[i];
+
+                    // Calculate ideal angle for this neighbor
+                    let ideal_angle = start_angle + (i as f32 * angle_spacing);
+
+                    // Calculate ideal position at target distance and ideal angle
+                    let ideal_pos = Vec2::new(
+                        pos.x + ideal_angle.cos() * target_distance,
+                        pos.y + ideal_angle.sin() * target_distance,
+                    );
+
+                    // Calculate force to move neighbor toward ideal position
+                    let displacement = ideal_pos - current_pos;
+                    let force = displacement * alignment_strength;
+
+                    // Apply force to neighbor (only if not frozen)
+                    if let Some(neighbor) = &mut self.protons[neighbor_idx] {
+                        // Only apply forces to non-frozen molecules
+                        // Once frozen, stop applying alignment forces to prevent oscillations
+                        if !neighbor.is_water_frozen() {
+                            let acc = force / neighbor.mass();
+                            neighbor.add_velocity(acc * delta_time);
+                        }
+                    }
+                }
+            }
+        }
+
+        // PHASE 5: Check geometry and freeze appropriate formations
+        // 3 bonds = triangle, 4 bonds = square, 5 bonds = hexagon
+        for (idx, pos, _) in &water_molecules {
+            if let Some(proton) = &self.protons[*idx] {
+                let bonds = proton.water_h_bonds();
+                let bond_count = bonds.len();
+
+                let mut should_freeze = false;
+
+                match bond_count {
+                    3 => {
+                        // Triangle: Check if 3 bonded neighbors form roughly equal distances
+                        should_freeze = self.check_triangle_formation(*idx, *pos, bonds);
+                    }
+                    4 => {
+                        // Square: Check if 4 bonded neighbors form roughly equal distances
+                        should_freeze = self.check_square_formation(*idx, *pos, bonds);
+                    }
+                    5 => {
+                        // Hexagon: Check if 5 bonded neighbors are properly aligned at ~60° intervals
+                        should_freeze = self.check_hexagon_formation(*idx, *pos, bonds);
+                    }
+                    _ => {
+                        // 0-2 bonds or 6+ bonds: liquid state
+                        should_freeze = false;
+                    }
+                }
+
+                // Update frozen state
+                if let Some(p) = &mut self.protons[*idx] {
+                    p.set_water_frozen(should_freeze);
+
+                    // Freeze movement if properly formed
+                    if should_freeze {
+                        p.set_velocity(Vec2::ZERO);
+                    }
+                }
+            }
+        }
+
+        // PHASE 6: Detect hexagonal crystal rings and assign group IDs
+        // A perfect hexagon is 6 molecules in a ring, each with exactly 2 bonds
+        self.detect_and_mark_ice_crystals();
+
+        // PHASE 7: Apply rigid body movement to crystal groups
+        // All molecules in the same group move together as a unit
+        self.apply_crystal_group_rigid_movement();
+    }
+
+    /// Check if 3-bonded H2O forms a valid triangle
+    fn check_triangle_formation(&self, _idx: usize, pos: Vec2, bonds: &Vec<usize>) -> bool {
+        use std::f32::consts::PI;
+
+        if bonds.len() != 3 {
+            return false;
+        }
+
+        // Get positions and angles of all 3 neighbors
+        let mut neighbors: Vec<(Vec2, f32, f32)> = Vec::new(); // (position, distance, angle)
+        for bond_idx in bonds {
+            if let Some(partner) = &self.protons[*bond_idx] {
+                if partner.is_alive() && partner.is_h2o() {
+                    let partner_pos = partner.position();
+                    let delta = partner_pos - pos;
+                    let dist = delta.length();
+                    let angle = delta.y.atan2(delta.x);
+                    neighbors.push((partner_pos, dist, angle));
+                }
+            }
+        }
+
+        if neighbors.len() != 3 {
+            return false;
+        }
+
+        // Sort by angle
+        neighbors.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+
+        // Check if all distances are similar
+        let avg_dist = neighbors.iter().map(|(_, d, _)| d).sum::<f32>() / 3.0;
+        let dist_tolerance = 20.0;
+
+        for (_, dist, _) in &neighbors {
+            if (dist - avg_dist).abs() > dist_tolerance {
+                return false;
+            }
+        }
+
+        // Check if angles are approximately 120 degrees apart
+        let expected_angle = 2.0 * PI / 3.0; // 120 degrees
+        let angle_tolerance = 0.4; // ~23 degrees
+
+        for k in 0..3 {
+            let next_k = (k + 1) % 3;
+            let mut angle_diff = neighbors[next_k].2 - neighbors[k].2;
+
+            // Normalize angle difference to [0, 2π]
+            if angle_diff < 0.0 {
+                angle_diff += 2.0 * PI;
+            }
+
+            if (angle_diff - expected_angle).abs() > angle_tolerance {
+                return false;
+            }
+        }
+
+        avg_dist < proton::WATER_ICE_COMPRESSION_DISTANCE
+    }
+
+    /// Check if 4-bonded H2O forms a valid square
+    fn check_square_formation(&self, _idx: usize, pos: Vec2, bonds: &Vec<usize>) -> bool {
+        if bonds.len() != 4 {
+            return false;
+        }
+
+        // Get positions and angles of all 4 neighbors
+        let mut neighbors: Vec<(Vec2, f32, f32)> = Vec::new(); // (position, distance, angle)
+        for bond_idx in bonds {
+            if let Some(partner) = &self.protons[*bond_idx] {
+                if partner.is_alive() && partner.is_h2o() {
+                    let partner_pos = partner.position();
+                    let delta = partner_pos - pos;
+                    let dist = delta.length();
+                    let angle = delta.y.atan2(delta.x);
+                    neighbors.push((partner_pos, dist, angle));
+                }
+            }
+        }
+
+        if neighbors.len() != 4 {
+            return false;
+        }
+
+        // Sort by angle
+        neighbors.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+
+        // Check if all distances are similar
+        let avg_dist = neighbors.iter().map(|(_, d, _)| d).sum::<f32>() / 4.0;
+        let dist_tolerance = 20.0;
+
+        for (_, dist, _) in &neighbors {
+            if (dist - avg_dist).abs() > dist_tolerance {
+                return false;
+            }
+        }
+
+        // Check if angles are approximately 90 degrees apart
+        let expected_angle = PI / 2.0; // 90 degrees
+        let angle_tolerance = 0.5; // ~28 degrees
+
+        for k in 0..4 {
+            let next_k = (k + 1) % 4;
+            let mut angle_diff = neighbors[next_k].2 - neighbors[k].2;
+
+            // Normalize angle difference to [0, 2π]
+            if angle_diff < 0.0 {
+                angle_diff += 2.0 * PI;
+            }
+
+            if (angle_diff - expected_angle).abs() > angle_tolerance {
+                return false;
+            }
+        }
+
+        avg_dist < proton::WATER_ICE_COMPRESSION_DISTANCE
+    }
+
+    /// Check if 5-bonded H2O forms a valid hexagon
+    fn check_hexagon_formation(&self, _idx: usize, pos: Vec2, bonds: &Vec<usize>) -> bool {
+        if bonds.len() != 5 {
+            return false;
+        }
+
+        // Get positions and angles of all 5 neighbors
+        let mut neighbors: Vec<(Vec2, f32, f32)> = Vec::new(); // (position, distance, angle)
+        for bond_idx in bonds {
+            if let Some(partner) = &self.protons[*bond_idx] {
+                if partner.is_alive() && partner.is_h2o() {
+                    let partner_pos = partner.position();
+                    let delta = partner_pos - pos;
+                    let dist = delta.length();
+                    let angle = delta.y.atan2(delta.x);
+                    neighbors.push((partner_pos, dist, angle));
+                }
+            }
+        }
+
+        if neighbors.len() != 5 {
+            return false;
+        }
+
+        // Sort by angle
+        neighbors.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+
+        // Check if all distances are similar and close to ideal frozen ice length
+        let avg_dist = neighbors.iter().map(|(_, d, _)| d).sum::<f32>() / 5.0;
+        let dist_tolerance = 12.0;  // Tighter tolerance for perfect hexagons
+
+        for (_, dist, _) in &neighbors {
+            if (dist - avg_dist).abs() > dist_tolerance {
+                return false;
+            }
+        }
+
+        // Check if average distance is close to ideal frozen ice bond length
+        if (avg_dist - proton::WATER_ICE_FROZEN_REST_LENGTH).abs() > 15.0 {
+            return false;
+        }
+
+        // For hexagon with 5 bonds, we expect 60 degree spacing (hexagon alignment)
+        let expected_angle = PI / 3.0; // 60 degrees for hexagon
+
+        for k in 0..5 {
+            let next_k = (k + 1) % 5;
+            let mut angle_diff = neighbors[next_k].2 - neighbors[k].2;
+
+            // Normalize angle difference to [0, 2π]
+            if angle_diff < 0.0 {
+                angle_diff += 2.0 * PI;
+            }
+
+            if (angle_diff - expected_angle).abs() > proton::WATER_ICE_ANGLE_TOLERANCE {
+                return false;
+            }
+        }
+
+        avg_dist < proton::WATER_ICE_COMPRESSION_DISTANCE
+    }
+
+    /// Detect hexagonal ice crystals and assign group IDs for collective movement
+    /// When a center molecule has 5 properly-aligned bonds (perfect hexagon), all 6 molecules turn white
+    fn detect_and_mark_ice_crystals(&mut self) {
+        // First, clear all existing crystal group assignments
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_h2o() {
+                    proton.set_ice_crystal_group(None);
+                }
+            }
+        }
+
+        // Find all H2O molecules that form perfect hexagons (5 bonds + frozen state)
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || !proton.is_h2o() {
+                    continue;
+                }
+
+                // Check if this molecule forms a perfect hexagon (5 bonds, frozen state)
+                let bonds = proton.water_h_bonds();
+                if bonds.len() == 5 && proton.is_water_frozen() {
+                    // This is a perfect hexagon center!
+                    // Assign this molecule and all 5 neighbors to the same crystal group
+
+                    // Check if any of these molecules are already in a group
+                    let mut existing_group = assigned_groups[i];
+                    for &neighbor_idx in bonds {
+                        if assigned_groups[neighbor_idx].is_some() {
+                            existing_group = assigned_groups[neighbor_idx];
                             break;
                         }
                     }
 
-                    // Freeze if all bonds are compressed
-                    if all_compressed && !proton.is_water_frozen() {
-                        if let Some(p) = &mut self.protons[*idx] {
-                            p.set_water_frozen(true);
-                        }
-                    } else if !all_compressed && proton.is_water_frozen() {
-                        // Unfreeze if bonds are no longer compressed
-                        if let Some(p) = &mut self.protons[*idx] {
-                            p.set_water_frozen(false);
-                        }
-                    }
-                } else {
-                    // Not enough bonds - cannot be frozen
-                    if proton.is_water_frozen() {
-                        if let Some(p) = &mut self.protons[*idx] {
-                            p.set_water_frozen(false);
-                        }
+                    // If no existing group, create a new one
+                    let group_id = if let Some(gid) = existing_group {
+                        gid
+                    } else {
+                        let gid = next_group_id;
+                        next_group_id += 1;
+                        gid
+                    };
+
+                    // Assign group to center
+                    assigned_groups[i] = Some(group_id);
+
+                    // Assign group to all 5 neighbors
+                    for &neighbor_idx in bonds {
+                        assigned_groups[neighbor_idx] = Some(group_id);
                     }
                 }
             }
         }
 
-        // PHASE 6: Lock H2O molecules in place if they have 3-5 frozen bonds
-        // This makes the ice completely rigid and stationary for more ice formation
-        // 3 bonds = locked, 4 bonds = locked, 5 bonds = locked (all frozen)
-        // 0-2 bonds = mobile (liquid H2O)
-        for (idx, pos, _, _, _) in &water_molecules {
-            if let Some(proton) = &self.protons[*idx] {
-                if proton.is_water_frozen() {
-                    // Count how many bonds are to other frozen H2O molecules
-                    let mut frozen_bond_count = 0;
-                    for bond_idx in proton.water_h_bonds() {
-                        if let Some(partner) = &self.protons[*bond_idx] {
-                            if partner.is_alive() && partner.is_h2o() && partner.is_water_frozen() {
-                                frozen_bond_count += 1;
-                            }
-                        }
-                    }
-
-                    // Lock completely in place if 3, 4, or 5 frozen bonds (rigid ice)
-                    // More ice, less movement!
-                    if frozen_bond_count >= 3 {
-                        if let Some(p) = &mut self.protons[*idx] {
-                            p.set_velocity(Vec2::ZERO);
-                        }
-                    }
-                    // If only 0-2 frozen bonds, allow movement (liquid)
+        // Apply the group assignments to all protons
+        for (i, proton_opt) in self.protons.iter_mut().enumerate() {
+            if let Some(proton) = proton_opt {
+                if let Some(group_id) = assigned_groups[i] {
+                    proton.set_ice_crystal_group(Some(group_id));
+                    proton.set_water_frozen(true);  // Ensure frozen state
                 }
             }
         }
+    }
 
-        // PHASE 6.5: Apply repulsion from 3-5 bonded frozen H2O to non-bonded H2O
-        // This prevents ice from "folding" and trapping extra molecules inside the lattice
-        // 3, 4, and 5 bonded frozen H2O all repel non-bonded H2O to push them to the edges
-        let mut ice_repulsion_forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+    /// Apply rigid body movement to ice crystal groups
+    /// All molecules in the same crystal group move together with averaged velocity
+    fn apply_crystal_group_rigid_movement(&mut self) {
+        use std::collections::HashMap;
 
-        for i in 0..water_molecules.len() {
-            let (idx_a, pos_a, _, _, _) = water_molecules[i];
+        // Collect molecules by crystal group
+        let mut groups: HashMap<usize, Vec<usize>> = HashMap::new();
 
-            if let Some(proton_a) = &self.protons[idx_a] {
-                // Check if this is a frozen H2O with 3, 4, or 5 bonds
-                let bond_count = proton_a.water_h_bonds().len();
-                if proton_a.is_water_frozen() && bond_count >= 3 {
-                    let bonded_indices = proton_a.water_h_bonds().clone();
-
-                    // Repel all nearby H2O that are NOT in our bonded partner list
-                    // This pushes trapped molecules to the outer edges
-                    for j in 0..water_molecules.len() {
-                        if i == j {
-                            continue;
-                        }
-
-                        let (idx_b, pos_b, _, _, _) = water_molecules[j];
-
-                        // Skip if this H2O is in our bonded partner list
-                        if bonded_indices.contains(&idx_b) {
-                            continue;
-                        }
-
-                        let delta = pos_b - pos_a;
-                        let dist = delta.length();
-
-                        // Apply strong repulsion if within range
-                        if dist < proton::WATER_ICE_REPULSION_RANGE && dist > 0.1 {
-                            let dir = delta / dist;
-                            let force_magnitude = proton::WATER_ICE_REPULSION_STRENGTH * (1.0 - dist / proton::WATER_ICE_REPULSION_RANGE);
-                            ice_repulsion_forces[idx_b] += dir * force_magnitude;
-                        }
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_h2o() {
+                    if let Some(group_id) = proton.ice_crystal_group() {
+                        groups.entry(group_id).or_insert_with(Vec::new).push(i);
                     }
                 }
             }
         }
 
-        // Apply the repulsion forces
-        for (idx, _, _, mass, _) in &water_molecules {
-            let force = ice_repulsion_forces[*idx];
-            if force.length() > 0.01 {
-                if let Some(proton) = &mut self.protons[*idx] {
-                    let acc = force / *mass;
-                    proton.add_velocity(acc * delta_time);
-                }
-            }
-        }
-
-        // PHASE 7: Apply spring forces to bonded water molecules
-        // Use stronger forces and shorter rest length for frozen (ice) bonds
-        let mut bonded_pairs: Vec<(usize, usize, Vec2, Vec2, f32, f32, f32, bool)> = Vec::new();
-
-        for (idx, pos, _, mass, _) in &water_molecules {
-            if let Some(proton) = &self.protons[*idx] {
-                for (bond_idx, partner_idx) in proton.water_h_bonds().iter().enumerate() {
-                    // Only process each pair once
-                    if *partner_idx > *idx {
-                        if let Some(partner) = &self.protons[*partner_idx] {
-                            if partner.is_alive() && partner.is_h2o() {
-                                // Check if both molecules are frozen (ice bond)
-                                let both_frozen = proton.is_water_frozen() && partner.is_water_frozen();
-                                let rest_length = proton.water_bond_rest_lengths()[bond_idx];
-                                bonded_pairs.push((
-                                    *idx,
-                                    *partner_idx,
-                                    *pos,
-                                    partner.position(),
-                                    *mass,
-                                    partner.mass(),
-                                    rest_length,
-                                    both_frozen,
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Apply forces and check for breaking
-        for (idx1, idx2, pos1, pos2, m1, m2, rest_length, is_frozen) in bonded_pairs {
-            let delta = pos2 - pos1;
-            let dist = delta.length();
-
-            // Check if bond should break
-            if dist > proton::WATER_H_BOND_BREAKING_DISTANCE {
-                continue; // Bonds will be rebuilt next frame
+        // For each group, calculate average velocity and apply to all members
+        for (_group_id, member_indices) in groups {
+            if member_indices.is_empty() {
+                continue;
             }
 
-            // Apply spring force - use stronger force and different rest length for frozen bonds
-            if dist > 0.1 {
-                let (bond_strength, ice_rest_length) = if is_frozen {
-                    (proton::WATER_ICE_FROZEN_BOND_STRENGTH, proton::WATER_ICE_FROZEN_REST_LENGTH)
-                } else {
-                    (proton::WATER_H_BOND_STRENGTH, rest_length)
-                };
+            // Calculate average velocity of the group
+            let mut avg_velocity = Vec2::ZERO;
+            let mut count = 0;
 
-                let displacement = dist - ice_rest_length;
-                let force_magnitude = displacement * bond_strength;
-                let dir = delta / dist;
-                let force = dir * force_magnitude;
-
-                // For frozen bonds, apply forces more strongly to lock molecules in place
-                // For liquid bonds, apply normal forces
-                if let Some(p1) = &mut self.protons[idx1] {
-                    let acc1 = force / m1;
-                    p1.add_velocity(acc1 * delta_time);
-                }
-                if let Some(p2) = &mut self.protons[idx2] {
-                    let acc2 = -force / m2;
-                    p2.add_velocity(acc2 * delta_time);
+            for &idx in &member_indices {
+                if let Some(proton) = &self.protons[idx] {
+                    avg_velocity += proton.velocity();
+                    count += 1;
                 }
             }
-        }
 
-        // PHASE 8 (FINAL): Lock 3-5 bonded frozen H2O velocity to ZERO
-        // This MUST happen at the end, after ALL forces have been applied
-        // This ensures 3-5 bonded H2O absolutely cannot move, no matter what forces push it
-        for (idx, _, _, _, _) in &water_molecules {
-            if let Some(proton) = &self.protons[*idx] {
-                if proton.is_water_frozen() && proton.water_h_bonds().len() >= 3 {
-                    // Lock velocity - no movement allowed!
-                    if let Some(p) = &mut self.protons[*idx] {
-                        p.set_velocity(Vec2::ZERO);
+            if count > 0 {
+                avg_velocity /= count as f32;
+
+                // Apply average velocity to all members
+                for &idx in &member_indices {
+                    if let Some(proton) = &mut self.protons[idx] {
+                        proton.set_velocity(avg_velocity);
                     }
                 }
             }

@@ -90,23 +90,17 @@ pub mod proton {
     pub const WATER_RADIUS_MULTIPLIER: f32 = 3.0;
     pub const WATER_CAPTURE_RANGE: f32 = 45.0;
 
-    // Water hydrogen bonding (polarity-based weak bonds)
-    pub const WATER_H_BOND_STRENGTH: f32 = 350.0;  // Increased force to pull molecules together
-    pub const WATER_H_BOND_BREAKING_DISTANCE: f32 = 150.0;  // Distance at which bonds break
-    pub const WATER_H_BOND_RANGE: f32 = 120.0;  // Shorter detection range for bonding
-    pub const WATER_H_BOND_REST_LENGTH: f32 = 75.0;  // Hold molecules ~75 pixels apart
+    // Water hydrogen bonding (simple geometric ice formation)
+    pub const WATER_H_BOND_RANGE: f32 = 100.0;  // Detection range for bonding
+    pub const WATER_H_BOND_REST_LENGTH: f32 = 75.0;  // Visual bond length
     pub const WATER_EVAPORATION_SPEED: f32 = 80.0;  // Speed at which H2O breaks bonds (evaporates)
-    pub const WATER_2BOND_BREAKING_DISTANCE: f32 = 95.0;  // 2-bonded H2O breaks easier (closer distance)
 
-    // Water ice formation (H2O freezing when compressed)
-    pub const WATER_ICE_COMPRESSION_DISTANCE: f32 = 85.0;  // Distance at which H2O bonds freeze
-    pub const WATER_ICE_MIN_NEIGHBORS: usize = 3;  // Minimum H2O bonds to freeze (3+ bonds = frozen)
-    pub const WATER_ICE_FROZEN_BOND_STRENGTH: f32 = 1200.0;  // Very strong rigid bonds when frozen
-    pub const WATER_ICE_FROZEN_REST_LENGTH: f32 = 68.0;  // Compressed rest length for ice (tighter)
-    pub const WATER_ICE_MELT_SPEED: f32 = 60.0;  // Speed at which ice melts (breaks frozen bonds)
-    pub const WATER_ICE_MAX_BONDS: usize = 5;  // All H2O can form up to 5 bonds (3 neg + 2 pos)
-    pub const WATER_ICE_REPULSION_STRENGTH: f32 = 4500.0;  // Strong repulsion from 3-5 bonded frozen H2O
-    pub const WATER_ICE_REPULSION_RANGE: f32 = 110.0;  // Range of repulsion effect
+    // Water ice formation (geometric patterns: 3=triangle, 4=square, 5=hexagon)
+    pub const WATER_ICE_COMPRESSION_DISTANCE: f32 = 90.0;  // Max distance for valid ice formation
+    pub const WATER_ICE_MAX_BONDS: usize = 5;  // Max bonds per H2O (3=triangle, 4=square, 5=hexagon)
+    pub const WATER_ICE_FROZEN_REST_LENGTH: f32 = 68.0;  // Perfect hexagonal ice bond length
+    pub const WATER_ICE_ANGLE_TOLERANCE: f32 = 0.15;  // ~8.6 degrees - strict hexagonal tolerance
+    pub const WATER_ICE_ALIGNMENT_STRENGTH: f32 = 25.0;  // Gentle force to avoid breaking bonds during alignment
 
     // Neon-20 (alpha capture on oxygen)
     pub const NEON20_COLOR: (u8, u8, u8) = (255, 100, 150);

@@ -50,6 +50,7 @@ pub struct Proton {
     water_h_bonds: Vec<usize>, // Indices of hydrogen-bonded water molecules (max 3)
     water_bond_rest_lengths: Vec<f32>, // Rest lengths for each hydrogen bond
     is_water_frozen: bool, // True when H2O is compressed into ice (frozen state)
+    ice_crystal_group: Option<usize>, // Group ID for connected ice crystals (for collective movement)
 
     // Neon-20 flag
     is_neon20: bool,
@@ -109,6 +110,7 @@ impl Proton {
             water_h_bonds: Vec::new(),
             water_bond_rest_lengths: Vec::new(),
             is_water_frozen: false,
+            ice_crystal_group: None,
             is_neon20: false,
             is_magnesium24: false,
             is_silicon28: false,
@@ -334,7 +336,12 @@ impl Proton {
             render_radius *= pc::MGH2_RADIUS_MULTIPLIER;
         }
         else if self.is_h2o {
-            render_color = Color::from_rgba(40, 100, 180, 255);
+            // Frozen ice crystals are white, liquid water is blue
+            if self.ice_crystal_group.is_some() {
+                render_color = Color::from_rgba(255, 255, 255, 255);  // White ice
+            } else {
+                render_color = Color::from_rgba(40, 100, 180, 255);  // Blue water
+            }
             render_radius *= pc::WATER_RADIUS_MULTIPLIER;
         }
         // Alpha ladder elements
@@ -498,6 +505,8 @@ impl Proton {
     }
     pub fn is_water_frozen(&self) -> bool { self.is_water_frozen }
     pub fn set_water_frozen(&mut self, frozen: bool) { self.is_water_frozen = frozen; }
+    pub fn ice_crystal_group(&self) -> Option<usize> { self.ice_crystal_group }
+    pub fn set_ice_crystal_group(&mut self, group: Option<usize>) { self.ice_crystal_group = group; }
 
     // Neon-20 getters/setters
     pub fn is_neon20(&self) -> bool { self.is_neon20 }
