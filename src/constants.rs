@@ -93,14 +93,17 @@ pub mod proton {
     // Water hydrogen bonding (simple geometric ice formation)
     pub const WATER_H_BOND_RANGE: f32 = 100.0;  // Detection range for bonding
     pub const WATER_H_BOND_REST_LENGTH: f32 = 75.0;  // Visual bond length
-    pub const WATER_EVAPORATION_SPEED: f32 = 80.0;  // Speed at which H2O breaks bonds (evaporates)
+    pub const WATER_EVAPORATION_SPEED: f32 = 40.0;  // Speed at which H2O breaks bonds (evaporates) - reduced to allow bonding
+    pub const WATER_FROZEN_EVAPORATION_SPEED: f32 = 120.0;  // Much higher speed needed to break frozen ice bonds
 
     // Water ice formation (geometric patterns: 3=triangle, 4=square, 5=hexagon)
     pub const WATER_ICE_COMPRESSION_DISTANCE: f32 = 90.0;  // Max distance for valid ice formation
     pub const WATER_ICE_MAX_BONDS: usize = 5;  // Max bonds per H2O (3=triangle, 4=square, 5=hexagon)
     pub const WATER_ICE_FROZEN_REST_LENGTH: f32 = 68.0;  // Perfect hexagonal ice bond length
-    pub const WATER_ICE_ANGLE_TOLERANCE: f32 = 0.15;  // ~8.6 degrees - strict hexagonal tolerance
-    pub const WATER_ICE_ALIGNMENT_STRENGTH: f32 = 25.0;  // Gentle force to avoid breaking bonds during alignment
+    pub const WATER_ICE_ANGLE_TOLERANCE: f32 = 0.35;  // ~20 degrees - relaxed tolerance for realistic geometry
+    pub const WATER_ICE_ANGLE_TOLERANCE_TO_FROZEN: f32 = 0.52;  // ~30 degrees - more relaxed when bonding to frozen neighbors
+    pub const WATER_ICE_ALIGNMENT_STRENGTH: f32 = 8.0;  // Reduced force to prevent drift and over-pushing
+    pub const WATER_ICE_SEED_GROWTH_MIN_FROZEN_NEIGHBORS: usize = 2;  // Min frozen neighbors to trigger rapid freezing
 
     // Neon-20 (alpha capture on oxygen)
     pub const NEON20_COLOR: (u8, u8, u8) = (255, 100, 150);

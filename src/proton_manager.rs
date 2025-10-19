@@ -972,7 +972,19 @@ impl ProtonManager {
         // PHASE 2: Check for evaporation (too much speed breaks bonds)
         for (idx, _, vel) in &water_molecules {
             let speed = vel.length();
-            if speed > proton::WATER_EVAPORATION_SPEED {
+
+            // Use different evaporation thresholds for frozen vs liquid water
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_water_frozen() {
+                    proton::WATER_FROZEN_EVAPORATION_SPEED  // Frozen ice is much harder to evaporate
+                } else {
+                    proton::WATER_EVAPORATION_SPEED
+                }
+            } else {
+                proton::WATER_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
                 // Moving too fast - break all bonds (evaporation)
                 if let Some(proton) = &mut self.protons[*idx] {
                     proton.clear_water_h_bonds();
@@ -982,9 +994,14 @@ impl ProtonManager {
         }
 
         // PHASE 3: Clear existing bonds (we'll rebuild them each frame)
+        // BUT: Keep bonds for frozen molecules to maintain stable ice structures
         for (idx, _, _) in &water_molecules {
             if let Some(proton) = &mut self.protons[*idx] {
-                proton.clear_water_h_bonds();
+                // Only clear bonds for non-frozen molecules
+                // Frozen molecules keep their bonds to act as seed crystals
+                if !proton.is_water_frozen() {
+                    proton.clear_water_h_bonds();
+                }
             }
         }
 
@@ -992,6 +1009,18 @@ impl ProtonManager {
         // This enforces 60° spacing between neighbors for perfect hexagons
         for i in 0..water_molecules.len() {
             let (idx_a, pos_a, _) = water_molecules[i];
+
+            // Skip frozen molecules - they keep their existing bonds
+            // Liquid molecules can still bond TO frozen ones
+            let is_frozen = if let Some(p) = &self.protons[idx_a] {
+                p.is_water_frozen()
+            } else {
+                continue;
+            };
+
+            if is_frozen {
+                continue;  // Frozen molecules don't form new bonds
+            }
 
             // Get current bonds and their angles (clone to avoid borrow issues)
             let existing_bonds = if let Some(proton_a) = &self.protons[idx_a] {
@@ -1083,6 +1112,13 @@ impl ProtonManager {
                         .map(|i| base_angle + (i as f32) * PI / 3.0)
                         .collect();
 
+                    // Use more relaxed angle tolerance when bonding to frozen neighbors (promotes seed growth)
+                    let angle_tolerance = if _is_frozen {
+                        proton::WATER_ICE_ANGLE_TOLERANCE_TO_FROZEN
+                    } else {
+                        proton::WATER_ICE_ANGLE_TOLERANCE
+                    };
+
                     // Check if neighbor angle matches any ideal slot
                     for ideal_angle in ideal_slots {
                         let mut angle_diff = (neighbor_angle - ideal_angle).abs();
@@ -1092,7 +1128,7 @@ impl ProtonManager {
                             angle_diff -= 2.0 * PI;
                         }
 
-                        if angle_diff.abs() < proton::WATER_ICE_ANGLE_TOLERANCE {
+                        if angle_diff.abs() < angle_tolerance {
                             // Also check it's not too close to existing bonds
                             let mut too_close_to_existing = false;
                             for existing_angle in &existing_angles {
@@ -1170,10 +1206,10 @@ impl ProtonManager {
                 // Calculate ideal angle spacing and parameters based on bond count
                 // Reduced forces to prevent bonds from breaking
                 let (angle_spacing, target_distance, alignment_strength) = match bond_count {
-                    3 => (2.0 * PI / 3.0, 75.0, 40.0),  // 120° for triangle - gentle force
-                    4 => (PI / 2.0, 75.0, 30.0),        // 90° for square - very gentle force
-                    5 => (PI / 3.0, proton::WATER_ICE_FROZEN_REST_LENGTH, 25.0),  // 60° for hexagon - very gentle to prevent bond breaking
-                    _ => (0.0, 75.0, 40.0),
+                    3 => (2.0 * PI / 3.0, 75.0, 20.0),  // 120° for triangle - gentle force
+                    4 => (PI / 2.0, 75.0, 15.0),        // 90° for square - very gentle force
+                    5 => (PI / 3.0, proton::WATER_ICE_FROZEN_REST_LENGTH, proton::WATER_ICE_ALIGNMENT_STRENGTH),  // 60° for hexagon - use constant
+                    _ => (0.0, 75.0, 20.0),
                 };
 
                 // Calculate ideal positions for each neighbor
@@ -1209,34 +1245,80 @@ impl ProtonManager {
 
         // PHASE 5: Check geometry and freeze appropriate formations
         // 3 bonds = triangle, 4 bonds = square, 5 bonds = hexagon
+        // SEED CRYSTAL GROWTH: Molecules with 2+ frozen neighbors freeze more easily
         for (idx, pos, _) in &water_molecules {
             if let Some(proton) = &self.protons[*idx] {
                 let bonds = proton.water_h_bonds();
                 let bond_count = bonds.len();
 
-                let mut should_freeze = false;
-
-                match bond_count {
-                    3 => {
-                        // Triangle: Check if 3 bonded neighbors form roughly equal distances
-                        should_freeze = self.check_triangle_formation(*idx, *pos, bonds);
-                    }
-                    4 => {
-                        // Square: Check if 4 bonded neighbors form roughly equal distances
-                        should_freeze = self.check_square_formation(*idx, *pos, bonds);
-                    }
-                    5 => {
-                        // Hexagon: Check if 5 bonded neighbors are properly aligned at ~60° intervals
-                        should_freeze = self.check_hexagon_formation(*idx, *pos, bonds);
-                    }
-                    _ => {
-                        // 0-2 bonds or 6+ bonds: liquid state
-                        should_freeze = false;
+                // Count how many bonded neighbors are frozen
+                let mut frozen_neighbor_count = 0;
+                for bond_idx in bonds {
+                    if let Some(neighbor) = &self.protons[*bond_idx] {
+                        if neighbor.is_water_frozen() {
+                            frozen_neighbor_count += 1;
+                        }
                     }
                 }
 
-                // Update frozen state
+                let mut should_freeze = false;
+
+                // SEED CRYSTAL GROWTH: If this H2O has 2+ frozen neighbors and at least 3 bonds,
+                // freeze it immediately (acts as ice growth from seed crystal)
+                if frozen_neighbor_count >= proton::WATER_ICE_SEED_GROWTH_MIN_FROZEN_NEIGHBORS && bond_count >= 3 {
+                    // Verify basic geometry (not too far apart)
+                    let mut max_dist = 0.0;
+                    for bond_idx in bonds {
+                        if let Some(neighbor) = &self.protons[*bond_idx] {
+                            let dist = pos.distance(neighbor.position());
+                            if dist > max_dist {
+                                max_dist = dist;
+                            }
+                        }
+                    }
+
+                    // If all bonds are within reasonable distance, freeze this molecule
+                    if max_dist < proton::WATER_ICE_COMPRESSION_DISTANCE {
+                        should_freeze = true;
+                    }
+                } else {
+                    // Normal freezing logic for isolated clusters
+                    match bond_count {
+                        3 => {
+                            // Triangle: Check if 3 bonded neighbors form roughly equal distances
+                            should_freeze = self.check_triangle_formation(*idx, *pos, bonds);
+                        }
+                        4 => {
+                            // Square: Check if 4 bonded neighbors form roughly equal distances
+                            should_freeze = self.check_square_formation(*idx, *pos, bonds);
+                        }
+                        5 => {
+                            // Hexagon: Check if 5 bonded neighbors are properly aligned at ~60° intervals
+                            should_freeze = self.check_hexagon_formation(*idx, *pos, bonds);
+                        }
+                        _ => {
+                            // 0-2 bonds or 6+ bonds: liquid state
+                            should_freeze = false;
+                        }
+                    }
+                }
+
+                // Apply progressive velocity damping based on bond count
+                // This helps molecules settle into stable formations
                 if let Some(p) = &mut self.protons[*idx] {
+                    let damping_factor = match bond_count {
+                        3 => 0.95,  // Light damping for triangles
+                        4 => 0.90,  // Moderate damping for squares
+                        5 => 0.85,  // Strong damping for hexagons
+                        _ => 1.0,   // No damping for 0-2 bonds
+                    };
+
+                    if damping_factor < 1.0 {
+                        let current_vel = p.velocity();
+                        p.set_velocity(current_vel * damping_factor);
+                    }
+
+                    // Update frozen state
                     p.set_water_frozen(should_freeze);
 
                     // Freeze movement if properly formed
@@ -1403,7 +1485,7 @@ impl ProtonManager {
 
         // Check if all distances are similar and close to ideal frozen ice length
         let avg_dist = neighbors.iter().map(|(_, d, _)| d).sum::<f32>() / 5.0;
-        let dist_tolerance = 12.0;  // Tighter tolerance for perfect hexagons
+        let dist_tolerance = 20.0;  // Relaxed tolerance to allow realistic imperfect geometry
 
         for (_, dist, _) in &neighbors {
             if (dist - avg_dist).abs() > dist_tolerance {
@@ -1412,7 +1494,7 @@ impl ProtonManager {
         }
 
         // Check if average distance is close to ideal frozen ice bond length
-        if (avg_dist - proton::WATER_ICE_FROZEN_REST_LENGTH).abs() > 15.0 {
+        if (avg_dist - proton::WATER_ICE_FROZEN_REST_LENGTH).abs() > 20.0 {
             return false;
         }
 

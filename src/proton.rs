@@ -170,6 +170,11 @@ impl Proton {
             self.velocity = (self.velocity / speed) * pc::MAX_SPEED;
         }
 
+        // Apply friction to liquid H2O molecules (helps them settle into ice)
+        if self.is_h2o && !self.is_water_frozen {
+            self.velocity *= 0.98;  // Per-frame damping for water molecules
+        }
+
         // Straight-line movement
         self.position += self.velocity * delta_time;
 
@@ -336,11 +341,20 @@ impl Proton {
             render_radius *= pc::MGH2_RADIUS_MULTIPLIER;
         }
         else if self.is_h2o {
-            // Frozen ice crystals are white, liquid water is blue
-            if self.ice_crystal_group.is_some() {
-                render_color = Color::from_rgba(255, 255, 255, 255);  // White ice
+            // Progressive coloring based on bond count and frozen state
+            let bond_count = self.water_h_bonds.len();
+            if bond_count >= 5 && self.is_water_frozen {
+                // Fully frozen hexagonal ice - white
+                render_color = Color::from_rgba(255, 255, 255, 255);
+            } else if bond_count == 4 {
+                // 4 bonds - lighter blue (approaching freezing)
+                render_color = Color::from_rgba(160, 180, 210, 255);
+            } else if bond_count == 3 {
+                // 3 bonds - light blue (partial bonding)
+                render_color = Color::from_rgba(120, 150, 200, 255);
             } else {
-                render_color = Color::from_rgba(40, 100, 180, 255);  // Blue water
+                // 0-2 bonds - liquid water (blue)
+                render_color = Color::from_rgba(40, 100, 180, 255);
             }
             render_radius *= pc::WATER_RADIUS_MULTIPLIER;
         }
