@@ -172,7 +172,7 @@ impl Proton {
 
         // Apply friction to liquid H2O molecules (helps them settle into ice)
         if self.is_h2o && !self.is_water_frozen {
-            self.velocity *= 0.98;  // Per-frame damping for water molecules
+            self.velocity *= 1.00;  // Per-frame damping for water molecules
         }
 
         // Straight-line movement

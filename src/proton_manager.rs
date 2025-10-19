@@ -1206,10 +1206,10 @@ impl ProtonManager {
                 // Calculate ideal angle spacing and parameters based on bond count
                 // Reduced forces to prevent bonds from breaking
                 let (angle_spacing, target_distance, alignment_strength) = match bond_count {
-                    3 => (2.0 * PI / 3.0, 75.0, 20.0),  // 120° for triangle - gentle force
-                    4 => (PI / 2.0, 75.0, 15.0),        // 90° for square - very gentle force
+                    3 => (2.0 * PI / 3.0, 75.0, 3.0),  // 120° for triangle - gentle force
+                    4 => (PI / 2.0, 75.0, 3.0),        // 90° for square - 80% weaker force
                     5 => (PI / 3.0, proton::WATER_ICE_FROZEN_REST_LENGTH, proton::WATER_ICE_ALIGNMENT_STRENGTH),  // 60° for hexagon - use constant
-                    _ => (0.0, 75.0, 20.0),
+                    _ => (0.0, 75.0, 6.0),
                 };
 
                 // Calculate ideal positions for each neighbor
