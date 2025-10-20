@@ -387,6 +387,19 @@ impl RingManager {
         self.current_color
     }
 
+    /// Get current color index
+    pub fn get_current_color_index(&self) -> usize {
+        self.current_color_index
+    }
+
+    /// Set color by index
+    pub fn set_color_by_index(&mut self, index: usize) {
+        if index < self.colors.len() {
+            self.current_color_index = index;
+            self.current_color = self.colors[index];
+        }
+    }
+
     /// Get current color as a string
     pub fn get_current_color_string(&self) -> String {
         format!(

@@ -103,6 +103,63 @@ struct Button {
     label: String,
 }
 
+struct ColorSlider {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    num_colors: usize,
+    is_dragging: bool,
+}
+
+impl ColorSlider {
+    fn new(x: f32, y: f32, width: f32, height: f32, num_colors: usize) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+            num_colors,
+            is_dragging: false,
+        }
+    }
+
+    fn contains_point(&self, px: f32, py: f32) -> bool {
+        px >= self.x && px <= self.x + self.width && py >= self.y && py <= self.y + self.height
+    }
+
+    fn get_color_index_from_position(&self, mouse_x: f32) -> usize {
+        let relative_x = (mouse_x - self.x).max(0.0).min(self.width);
+        let ratio = relative_x / self.width;
+        let index = (ratio * self.num_colors as f32) as usize;
+        index.min(self.num_colors - 1)
+    }
+
+    fn draw(&self, current_color_index: usize, colors: &[Color]) {
+        // Draw background
+        draw_rectangle(self.x, self.y, self.width, self.height, Color::from_rgba(30, 30, 30, 200));
+
+        // Draw color segments
+        let segment_width = self.width / self.num_colors as f32;
+        for i in 0..self.num_colors {
+            let seg_x = self.x + i as f32 * segment_width;
+            draw_rectangle(seg_x, self.y, segment_width, self.height, colors[i]);
+        }
+
+        // Draw border
+        draw_rectangle_lines(self.x, self.y, self.width, self.height, 2.0, WHITE);
+
+        // Draw indicator at current position
+        let indicator_x = self.x + (current_color_index as f32 / self.num_colors as f32) * self.width + segment_width / 2.0;
+        let indicator_y = self.y + self.height / 2.0;
+
+        // Draw indicator as a circle
+        draw_circle(indicator_x, indicator_y, 8.0, BLACK);
+        draw_circle(indicator_x, indicator_y, 6.0, colors[current_color_index]);
+        draw_circle_lines(indicator_x, indicator_y, 6.0, 2.0, WHITE);
+    }
+}
+
 impl Button {
     fn new(x: f32, y: f32, width: f32, height: f32, label: &str) -> Self {
         Self {
@@ -136,7 +193,7 @@ fn draw_elements_menu(discovered: &HashSet<ElementType>, counts: &std::collectio
     draw_rectangle(0.0, 0.0, window_size.0, window_size.1, Color::from_rgba(0, 0, 0, 180));
 
     // Menu panel
-    let menu_width = 400.0;
+    let menu_width = 500.0;
     let menu_height = 500.0;
     let menu_x = (window_size.0 - menu_width) / 2.0;
     let menu_y = (window_size.1 - menu_height) / 2.0;
@@ -149,22 +206,32 @@ fn draw_elements_menu(discovered: &HashSet<ElementType>, counts: &std::collectio
     let title_dims = measure_text(title, None, 30, 1.0);
     draw_text(title, menu_x + (menu_width - title_dims.width) / 2.0, menu_y + 40.0, 30.0, YELLOW);
 
-    // Element list
-    let mut y_offset = menu_y + 80.0;
+    // Element list - two columns layout
     let line_height = 40.0;
+    let column_width = menu_width / 2.0;
+    let elements_per_column = 9;
+
+    let mut discovered_index = 0;
 
     for element in ElementType::all() {
         if discovered.contains(&element) {
             let count = counts.get(element.name()).unwrap_or(&0);
             let text = format!("{} ({})", element.name(), count);
 
+            // Determine column and position
+            let column = discovered_index / elements_per_column;
+            let row_in_column = discovered_index % elements_per_column;
+
+            let x_offset = menu_x + (column as f32 * column_width);
+            let y_offset = menu_y + 80.0 + (row_in_column as f32 * line_height);
+
             // Draw element circle
-            draw_circle(menu_x + 30.0, y_offset, 12.0, element.color());
+            draw_circle(x_offset + 30.0, y_offset, 12.0, element.color());
 
             // Draw element text
-            draw_text(&text, menu_x + 60.0, y_offset + 7.0, 24.0, WHITE);
+            draw_text(&text, x_offset + 60.0, y_offset + 7.0, 24.0, WHITE);
 
-            y_offset += line_height;
+            discovered_index += 1;
         }
     }
 
@@ -215,7 +282,7 @@ fn draw_controls_menu(fps: f32, ring_manager: &RingManager, atom_manager: &AtomM
     let controls = vec![
         "Left Click: Spawn energy ring",
         "Right Click & Drag: Spawn selected element with velocity",
-        "C: Cycle ring color",
+        "Color Slider (bottom): Click/drag to change ring color",
         "R: Clear all non-stable particles",
         "Space: Clear all non-stable particles",
         "H: Delete all stable hydrogen",
@@ -270,6 +337,9 @@ async fn main() {
     let elements_button = Button::new(10.0, 10.0, 120.0, 40.0, "Elements");
     let controls_button = Button::new(0.0, 10.0, 120.0, 40.0, "Controls"); // x will be set in loop
 
+    // Create color slider (positioned at bottom, will be updated each frame)
+    let mut color_slider = ColorSlider::new(0.0, 0.0, 0.0, 30.0, constants::COLOR_PALETTE_SIZE);
+
     loop {
         let delta_time = get_frame_time();
         let window_size = (screen_width(), screen_height());
@@ -277,6 +347,13 @@ async fn main() {
         // Update controls button position (top right)
         let mut controls_button_positioned = controls_button.clone();
         controls_button_positioned.x = window_size.0 - controls_button.width - 10.0;
+
+        // Update color slider position (centered at bottom)
+        let slider_width = 600.0;
+        let slider_margin = 20.0;
+        color_slider.x = (window_size.0 - slider_width) / 2.0;
+        color_slider.y = window_size.1 - color_slider.height - slider_margin;
+        color_slider.width = slider_width;
 
         // FPS counter
         fps_timer += delta_time;
@@ -332,6 +409,9 @@ async fn main() {
         // Draw buttons (always visible)
         elements_button.draw();
         controls_button_positioned.draw();
+
+        // Draw color slider (always visible)
+        color_slider.draw(ring_manager.get_current_color_index(), &constants::RING_COLORS);
 
         // Draw selected element indicator
         if let Some(elem) = selected_element {
@@ -398,7 +478,7 @@ async fn main() {
                 },
                 MenuState::Elements => {
                     // Check if clicking an element in the menu
-                    let menu_width = 400.0;
+                    let menu_width = 500.0;
                     let menu_height = 500.0;
                     let menu_x = (window_size.0 - menu_width) / 2.0;
                     let menu_y = (window_size.1 - menu_height) / 2.0;
@@ -406,19 +486,29 @@ async fn main() {
                     // Check if clicking inside menu
                     if mouse_pos.0 >= menu_x && mouse_pos.0 <= menu_x + menu_width &&
                        mouse_pos.1 >= menu_y && mouse_pos.1 <= menu_y + menu_height {
-                        // Check which element was clicked
-                        let mut y_offset = menu_y + 80.0;
+                        // Check which element was clicked - two columns layout
                         let line_height = 40.0;
+                        let column_width = menu_width / 2.0;
+                        let elements_per_column = 9;
+                        let mut discovered_index = 0;
 
                         for element in ElementType::all() {
                             if discovered_elements.contains(&element) {
+                                // Determine column and position
+                                let column = discovered_index / elements_per_column;
+                                let row_in_column = discovered_index % elements_per_column;
+
+                                let x_offset = menu_x + (column as f32 * column_width);
+                                let y_offset = menu_y + 80.0 + (row_in_column as f32 * line_height);
+
                                 // Check if mouse is over this element
-                                if mouse_pos.1 >= y_offset - line_height / 2.0 && mouse_pos.1 < y_offset + line_height / 2.0 {
+                                if mouse_pos.0 >= x_offset && mouse_pos.0 <= x_offset + column_width &&
+                                   mouse_pos.1 >= y_offset - line_height / 2.0 && mouse_pos.1 < y_offset + line_height / 2.0 {
                                     selected_element = Some(element);
                                     menu_state = MenuState::None;
                                     break;
                                 }
-                                y_offset += line_height;
+                                discovered_index += 1;
                             }
                         }
                     } else {
@@ -471,9 +561,25 @@ async fn main() {
             }
         }
 
-        // Cycle color with C key (only when not paused)
-        if !paused && is_key_pressed(KeyCode::C) {
-            ring_manager.cycle_to_next_color();
+        // Color slider interaction
+        if menu_state == MenuState::None {
+            // Start dragging slider
+            if is_mouse_button_pressed(MouseButton::Left) && color_slider.contains_point(mouse_pos.0, mouse_pos.1) {
+                color_slider.is_dragging = true;
+                let new_color_index = color_slider.get_color_index_from_position(mouse_pos.0);
+                ring_manager.set_color_by_index(new_color_index);
+            }
+
+            // Continue dragging slider
+            if color_slider.is_dragging && is_mouse_button_down(MouseButton::Left) {
+                let new_color_index = color_slider.get_color_index_from_position(mouse_pos.0);
+                ring_manager.set_color_by_index(new_color_index);
+            }
+
+            // Stop dragging slider
+            if is_mouse_button_released(MouseButton::Left) {
+                color_slider.is_dragging = false;
+            }
         }
 
         // Clear all with R key

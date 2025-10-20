@@ -73,9 +73,11 @@ impl ProtonManager {
         // STEP 2.6.5: S32 crystallization (orthorhombic non-metal)
         self.update_s32_crystallization(delta_time);
 
-        // TODO: Add He3 and He4 if needed
-        // self.update_he3_crystallization(delta_time);
-        // self.update_he4_crystallization(delta_time);
+        // STEP 2.6.6: He3 crystallization (ultra-weak noble gas)
+        self.update_he3_crystallization(delta_time);
+
+        // STEP 2.6.7: He4 crystallization (ultra-weak noble gas)
+        self.update_he4_crystallization(delta_time);
 
         // STEP 2.7: O16 bond forces and breaking
         self.update_oxygen_bonds(delta_time);
@@ -1226,7 +1228,7 @@ impl ProtonManager {
             }
         }
 
-        // Noble gas: simple cubic/tetrahedral coordination (4 neighbors)
+        // Noble gas: close-packed coordination (6-8 neighbors, weakly bonded)
         for (idx, pos, _) in &ne20_atoms {
             let on_cooldown = if let Some(proton) = &self.protons[*idx] {
                 proton.ne20_freeze_cooldown() > 0.0
@@ -1239,7 +1241,7 @@ impl ProtonManager {
 
             let neighbors = &neighbor_lists[*idx];
             if neighbors.len() >= pm::NE20_MIN_NEIGHBORS {
-                // Take closest 4 neighbors for cubic coordination
+                // Take closest 6-8 neighbors for close-packed noble gas structure
                 let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
                     .iter()
                     .filter_map(|&n_idx| {
@@ -1253,15 +1255,16 @@ impl ProtonManager {
                     .collect();
 
                 neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                let four_nearest: Vec<usize> = neighbors_with_dist
+                // Take up to 8 closest neighbors (close-packing)
+                let nearest: Vec<usize> = neighbors_with_dist
                     .iter()
-                    .take(pm::NE20_MIN_NEIGHBORS)
+                    .take(8.min(neighbors_with_dist.len()))
                     .map(|(idx, _)| *idx)
                     .collect();
 
                 if let Some(proton) = &mut self.protons[*idx] {
                     proton.set_ne20_crystallized(true);
-                    proton.set_ne20_crystal_bonds(four_nearest);
+                    proton.set_ne20_crystal_bonds(nearest);
                 }
             } else {
                 if let Some(proton) = &mut self.protons[*idx] {
@@ -1271,7 +1274,7 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 5: Apply alignment forces (tetrahedral/cubic arrangement) =====
+        // ===== PHASE 5: Apply weak distance-based forces (noble gas - no strict angles) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
         for (idx, pos, _) in &ne20_atoms {
             if let Some(proton) = &self.protons[*idx] {
@@ -1280,72 +1283,18 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.ne20_crystal_bonds();
-                let bond_count = bonds.len();
 
-                // Apply angular alignment for 4 bonds (90° spacing - square/tetrahedral)
-                if bond_count == 4 {
-                    // Get current positions and angles of bonded neighbors
-                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
-                    for bond_idx in bonds {
-                        if let Some(partner) = &self.protons[*bond_idx] {
-                            if partner.is_alive() && partner.is_neon20() {
-                                let partner_pos = partner.position();
-                                let delta = partner_pos - *pos;
-                                let dist = delta.length();
-                                let angle = delta.y.atan2(delta.x);
-                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
-                            }
-                        }
-                    }
-
-                    if neighbor_data.len() == 4 {
-                        // Sort by angle
-                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
-
-                        // Calculate ideal positions for 90° spacing (square)
-                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
-                        for i in 0..neighbor_data.len() {
-                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
-
-                            // Calculate ideal angle for this neighbor (90° = PI/2 spacing)
-                            let ideal_angle = start_angle + (i as f32 * pm::NE20_ANGLE_SPACING);
-
-                            // Calculate ideal position at target distance and ideal angle
-                            let ideal_pos = Vec2::new(
-                                pos.x + ideal_angle.cos() * pm::NE20_BOND_REST_LENGTH,
-                                pos.y + ideal_angle.sin() * pm::NE20_BOND_REST_LENGTH,
-                            );
-
-                            // Calculate force to move neighbor toward ideal position
-                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
-                                p.position()
-                            } else {
-                                continue;
-                            };
-
-                            let displacement = ideal_pos - current_pos;
-                            let force = displacement * pm::NE20_ALIGNMENT_STRENGTH;
-
-                            // Apply force to neighbor (only if not frozen)
-                            if let Some(neighbor) = &self.protons[neighbor_idx] {
-                                if !neighbor.is_ne20_crystallized() {
-                                    forces[neighbor_idx] += force;
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // For other bond counts, apply simple radial forces
-                    for &bond_idx in bonds {
-                        if let Some(bonded) = &self.protons[bond_idx] {
-                            let delta = bonded.position() - *pos;
-                            let dist = delta.length();
-                            if dist > 0.1 {
-                                let radial_displacement = dist - pm::NE20_BOND_REST_LENGTH;
-                                // Use gentle force (10% of bond strength) to prevent bond breaking
-                                let radial_force = (delta / dist) * (radial_displacement * pm::NE20_BOND_STRENGTH * 0.1);
-                                forces[bond_idx] += radial_force;
-                            }
+                // Noble gas: only weak radial forces, no angular alignment
+                // Atoms just "touch" and nestle together
+                for &bond_idx in bonds {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::NE20_BOND_REST_LENGTH;
+                            // Very gentle force - noble gas barely wants to stay together
+                            let radial_force = (delta / dist) * (radial_displacement * pm::NE20_BOND_STRENGTH * 0.15);
+                            forces[bond_idx] += radial_force;
                         }
                     }
                 }
@@ -1476,8 +1425,11 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 4: Form new bonds (3-fold graphite or 4-fold diamond) =====
+        // ===== PHASE 4: Form new bonds (DUAL MODE: graphite OR diamond based on pressure) =====
         let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        let mut pressure_counts: Vec<usize> = vec![0; self.protons.len()];
+
+        // Build neighbor lists for bonding distance
         for i in 0..c12_atoms.len() {
             for j in (i + 1)..c12_atoms.len() {
                 let (idx1, pos1, _) = c12_atoms[i];
@@ -1491,7 +1443,21 @@ impl ProtonManager {
             }
         }
 
-        // Graphite: 3-fold planar coordination
+        // Detect pressure (count carbons in wider radius for graphite->diamond transition)
+        for (idx, pos, _) in &c12_atoms {
+            let mut pressure_count = 0;
+            for (other_idx, other_pos, _) in &c12_atoms {
+                if idx != other_idx {
+                    let dist = pos.distance(*other_pos);
+                    if dist < pm::C12_PRESSURE_DETECTION_RADIUS {
+                        pressure_count += 1;
+                    }
+                }
+            }
+            pressure_counts[*idx] = pressure_count;
+        }
+
+        // Form bonds - choose graphite (3) or diamond (4) mode based on pressure
         for (idx, pos, _) in &c12_atoms {
             let on_cooldown = if let Some(proton) = &self.protons[*idx] {
                 proton.c12_freeze_cooldown() > 0.0
@@ -1503,7 +1469,14 @@ impl ProtonManager {
             }
 
             let neighbors = &neighbor_lists[*idx];
-            if neighbors.len() >= pm::C12_MIN_NEIGHBORS {
+            let pressure = pressure_counts[*idx];
+
+            // DIAMOND mode: high pressure (8+ nearby carbons) -> 4-fold tetrahedral
+            // GRAPHITE mode: low pressure -> 3-fold planar
+            let is_diamond_mode = pressure >= pm::C12_PRESSURE_THRESHOLD;
+            let min_bonds = if is_diamond_mode { pm::C12_MIN_NEIGHBORS_DIAMOND } else { pm::C12_MIN_NEIGHBORS_GRAPHITE };
+
+            if neighbors.len() >= min_bonds {
                 let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
                     .iter()
                     .filter_map(|&n_idx| {
@@ -1517,15 +1490,15 @@ impl ProtonManager {
                     .collect();
 
                 neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                let three_nearest: Vec<usize> = neighbors_with_dist
+                let nearest: Vec<usize> = neighbors_with_dist
                     .iter()
-                    .take(pm::C12_MIN_NEIGHBORS)
+                    .take(min_bonds)
                     .map(|(idx, _)| *idx)
                     .collect();
 
                 if let Some(proton) = &mut self.protons[*idx] {
                     proton.set_c12_crystallized(true);
-                    proton.set_c12_crystal_bonds(three_nearest);
+                    proton.set_c12_crystal_bonds(nearest);
                 }
             } else {
                 if let Some(proton) = &mut self.protons[*idx] {
@@ -1535,7 +1508,7 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 5: Apply alignment forces (120° graphite sheets) =====
+        // ===== PHASE 5: Apply alignment forces (GRAPHITE 120° OR DIAMOND 90° tetrahedral) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
         for (idx, pos, _) in &c12_atoms {
             if let Some(proton) = &self.protons[*idx] {
@@ -1546,10 +1519,9 @@ impl ProtonManager {
                 let bonds = proton.c12_crystal_bonds();
                 let bond_count = bonds.len();
 
-                // Apply angular alignment for 3 bonds (120° spacing - triangle/graphite)
+                // GRAPHITE mode: 3 bonds at 120° - flexible planar sheets
                 if bond_count == 3 {
-                    // Get current positions and angles of bonded neighbors
-                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new();
                     for bond_idx in bonds {
                         if let Some(partner) = &self.protons[*bond_idx] {
                             if partner.is_alive() && partner.is_stable_carbon12() {
@@ -1563,24 +1535,16 @@ impl ProtonManager {
                     }
 
                     if neighbor_data.len() == 3 {
-                        // Sort by angle
                         neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
-
-                        // Calculate ideal positions for 120° spacing (triangle/graphite)
-                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                        let start_angle = neighbor_data[0].3;
                         for i in 0..neighbor_data.len() {
                             let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
-
-                            // Calculate ideal angle for this neighbor (120° = 2*PI/3 spacing)
-                            let ideal_angle = start_angle + (i as f32 * pm::C12_ANGLE_SPACING);
-
-                            // Calculate ideal position at target distance and ideal angle
+                            let ideal_angle = start_angle + (i as f32 * pm::C12_ANGLE_SPACING_GRAPHITE);
                             let ideal_pos = Vec2::new(
                                 pos.x + ideal_angle.cos() * pm::C12_BOND_REST_LENGTH,
                                 pos.y + ideal_angle.sin() * pm::C12_BOND_REST_LENGTH,
                             );
 
-                            // Calculate force to move neighbor toward ideal position
                             let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
                                 p.position()
                             } else {
@@ -1588,9 +1552,51 @@ impl ProtonManager {
                             };
 
                             let displacement = ideal_pos - current_pos;
-                            let force = displacement * pm::C12_ALIGNMENT_STRENGTH;
+                            let force = displacement * pm::C12_ALIGNMENT_STRENGTH_GRAPHITE;
 
-                            // Apply force to neighbor (only if not frozen)
+                            if let Some(neighbor) = &self.protons[neighbor_idx] {
+                                if !neighbor.is_c12_crystallized() {
+                                    forces[neighbor_idx] += force;
+                                }
+                            }
+                        }
+                    }
+                }
+                // DIAMOND mode: 4 bonds at 90° - rigid tetrahedral (ultra-strong)
+                else if bond_count == 4 {
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new();
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_stable_carbon12() {
+                                let partner_pos = partner.position();
+                                let delta = partner_pos - *pos;
+                                let dist = delta.length();
+                                let angle = delta.y.atan2(delta.x);
+                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                            }
+                        }
+                    }
+
+                    if neighbor_data.len() == 4 {
+                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                        let start_angle = neighbor_data[0].3;
+                        for i in 0..neighbor_data.len() {
+                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+                            let ideal_angle = start_angle + (i as f32 * pm::C12_ANGLE_SPACING_DIAMOND);
+                            let ideal_pos = Vec2::new(
+                                pos.x + ideal_angle.cos() * pm::C12_BOND_REST_LENGTH,
+                                pos.y + ideal_angle.sin() * pm::C12_BOND_REST_LENGTH,
+                            );
+
+                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
+                                p.position()
+                            } else {
+                                continue;
+                            };
+
+                            let displacement = ideal_pos - current_pos;
+                            let force = displacement * pm::C12_ALIGNMENT_STRENGTH_DIAMOND; // Ultra-strong!
+
                             if let Some(neighbor) = &self.protons[neighbor_idx] {
                                 if !neighbor.is_c12_crystallized() {
                                     forces[neighbor_idx] += force;
@@ -1599,14 +1605,20 @@ impl ProtonManager {
                         }
                     }
                 } else {
-                    // For other bond counts, apply simple radial forces
+                    // Fallback for unusual bond counts - simple radial forces
+                    let bond_strength = if bond_count >= 4 {
+                        pm::C12_BOND_STRENGTH_DIAMOND
+                    } else {
+                        pm::C12_BOND_STRENGTH_GRAPHITE
+                    };
+
                     for &bond_idx in bonds {
                         if let Some(bonded) = &self.protons[bond_idx] {
                             let delta = bonded.position() - *pos;
                             let dist = delta.length();
                             if dist > 0.1 {
                                 let radial_displacement = dist - pm::C12_BOND_REST_LENGTH;
-                                let radial_force = (delta / dist) * (radial_displacement * pm::C12_BOND_STRENGTH * 0.1);
+                                let radial_force = (delta / dist) * (radial_displacement * bond_strength * 0.1);
                                 forces[bond_idx] += radial_force;
                             }
                         }
@@ -1649,7 +1661,7 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.c12_crystal_bonds();
-                if bonds.len() >= pm::C12_MIN_NEIGHBORS {
+                if bonds.len() >= pm::C12_MIN_NEIGHBORS_GRAPHITE {  // Minimum 3 for graphite
                     let all_frozen = bonds.iter().all(|&idx| {
                         if let Some(p) = &self.protons[idx] {
                             p.is_c12_crystallized()
@@ -2257,7 +2269,8 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 4: Form new bonds (4-fold orthorhombic) =====
+        // ===== PHASE 4: Form S₈ RINGS (each sulfur wants EXACTLY 2 bonds) =====
+        // Build neighbor lists (potential bonding partners)
         let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
         for i in 0..s32_atoms.len() {
             for j in (i + 1)..s32_atoms.len() {
@@ -2272,6 +2285,7 @@ impl ProtonManager {
             }
         }
 
+        // Form bonds - each sulfur gets exactly 2 bonds (for S₈ rings)
         for (idx, pos, _) in &s32_atoms {
             let on_cooldown = if let Some(proton) = &self.protons[*idx] {
                 proton.s32_freeze_cooldown() > 0.0
@@ -2282,40 +2296,96 @@ impl ProtonManager {
                 continue;
             }
 
+            // Check current bond count
+            let current_bond_count = if let Some(proton) = &self.protons[*idx] {
+                proton.s32_crystal_bonds().len()
+            } else {
+                0
+            };
+
+            // Sulfur wants EXACTLY 2 bonds (not more!)
+            if current_bond_count >= pm::S32_BONDS_PER_ATOM {
+                continue; // Already has 2 bonds
+            }
+
             let neighbors = &neighbor_lists[*idx];
-            if neighbors.len() >= pm::S32_MIN_NEIGHBORS {
-                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+            let bonds_needed = pm::S32_BONDS_PER_ATOM - current_bond_count;
+
+            if neighbors.len() > 0 && bonds_needed > 0 {
+                // Find nearest available neighbors (that also need bonds)
+                let mut available_neighbors: Vec<(usize, f32)> = neighbors
                     .iter()
                     .filter_map(|&n_idx| {
                         if let Some(n_proton) = &self.protons[n_idx] {
-                            let dist = pos.distance(n_proton.position());
-                            Some((n_idx, dist))
+                            // Only bond if neighbor also needs bonds (<2)
+                            if n_proton.s32_crystal_bonds().len() < pm::S32_BONDS_PER_ATOM {
+                                let dist = pos.distance(n_proton.position());
+                                Some((n_idx, dist))
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
                     })
                     .collect();
 
-                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                let four_nearest: Vec<usize> = neighbors_with_dist
-                    .iter()
-                    .take(pm::S32_MIN_NEIGHBORS)
-                    .map(|(idx, _)| *idx)
-                    .collect();
+                if available_neighbors.len() > 0 {
+                    available_neighbors.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-                if let Some(proton) = &mut self.protons[*idx] {
-                    proton.set_s32_crystallized(true);
-                    proton.set_s32_crystal_bonds(four_nearest);
-                }
-            } else {
-                if let Some(proton) = &mut self.protons[*idx] {
-                    proton.set_s32_crystallized(false);
-                    proton.clear_s32_crystal_bonds();
+                    // Take up to `bonds_needed` nearest neighbors
+                    let new_bonds: Vec<usize> = available_neighbors
+                        .iter()
+                        .take(bonds_needed)
+                        .map(|(idx, _)| *idx)
+                        .collect();
+
+                    // Add new bonds
+                    if let Some(proton) = &mut self.protons[*idx] {
+                        let mut current_bonds = proton.s32_crystal_bonds().clone();
+                        current_bonds.extend(new_bonds);
+                        proton.set_s32_crystal_bonds(current_bonds);
+
+                        // Mark as crystallized if has 2 bonds
+                        if proton.s32_crystal_bonds().len() >= pm::S32_BONDS_PER_ATOM {
+                            proton.set_s32_crystallized(true);
+                        }
+                    }
                 }
             }
         }
 
-        // ===== PHASE 5: Apply alignment forces (orthorhombic - 90° spacing) =====
+        // Detect complete S₈ rings and mark them
+        // (Simple version: if all bonds are satisfied, assume ring is complete)
+        for (idx, _, _) in &s32_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                let bond_count = proton.s32_crystal_bonds().len();
+                if bond_count >= pm::S32_BONDS_PER_ATOM {
+                    // Check if part of a closed ring (all neighbors also have 2 bonds)
+                    let all_neighbors_satisfied = proton.s32_crystal_bonds().iter().all(|&n_idx| {
+                        if let Some(n) = &self.protons[n_idx] {
+                            n.s32_crystal_bonds().len() >= pm::S32_BONDS_PER_ATOM
+                        } else {
+                            false
+                        }
+                    });
+
+                    if let Some(p) = &mut self.protons[*idx] {
+                        if all_neighbors_satisfied {
+                            p.set_s32_crystallized(true);
+                        } else {
+                            p.set_s32_crystallized(false);
+                        }
+                    }
+                } else {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_s32_crystallized(false);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply ring-maintaining forces (2 bonds per atom, flexible angles) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
         for (idx, pos, _) in &s32_atoms {
             if let Some(proton) = &self.protons[*idx] {
@@ -2326,67 +2396,62 @@ impl ProtonManager {
                 let bonds = proton.s32_crystal_bonds();
                 let bond_count = bonds.len();
 
-                // Apply angular alignment for 4 bonds (90° spacing - orthorhombic)
-                if bond_count == 4 {
-                    // Get current positions and angles of bonded neighbors
-                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
-                    for bond_idx in bonds {
-                        if let Some(partner) = &self.protons[*bond_idx] {
-                            if partner.is_alive() && partner.is_sulfur32() {
-                                let partner_pos = partner.position();
-                                let delta = partner_pos - *pos;
-                                let dist = delta.length();
-                                let angle = delta.y.atan2(delta.x);
-                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                // Sulfur in S₈ rings: exactly 2 bonds with flexible crown-ring geometry
+                if bond_count == pm::S32_BONDS_PER_ATOM {
+                    // Apply moderate radial forces to maintain ring bond lengths
+                    for &bond_idx in bonds {
+                        if let Some(bonded) = &self.protons[bond_idx] {
+                            let delta = bonded.position() - *pos;
+                            let dist = delta.length();
+                            if dist > 0.1 {
+                                // Gentle force to maintain bond length (rings are flexible)
+                                let radial_displacement = dist - pm::S32_BOND_REST_LENGTH;
+                                let radial_force = (delta / dist) * (radial_displacement * pm::S32_BOND_STRENGTH * 0.2);
+                                forces[bond_idx] += radial_force;
                             }
                         }
                     }
 
-                    if neighbor_data.len() == 4 {
-                        // Sort by angle
-                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+                    // Optional: apply weak angular preference for ~105° between bonds
+                    if bonds.len() == 2 {
+                        let bond1_idx = bonds[0];
+                        let bond2_idx = bonds[1];
 
-                        // Calculate ideal positions for 90° spacing (orthorhombic)
-                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
-                        for i in 0..neighbor_data.len() {
-                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+                        if let (Some(p1), Some(p2)) = (&self.protons[bond1_idx], &self.protons[bond2_idx]) {
+                            let delta1 = p1.position() - *pos;
+                            let delta2 = p2.position() - *pos;
+                            let angle1 = delta1.y.atan2(delta1.x);
+                            let angle2 = delta2.y.atan2(delta2.x);
 
-                            // Calculate ideal angle for this neighbor (90° = PI/2 spacing)
-                            let ideal_angle = start_angle + (i as f32 * pm::S32_ANGLE_SPACING);
+                            let mut angle_diff = (angle2 - angle1).abs();
+                            if angle_diff > std::f32::consts::PI {
+                                angle_diff = 2.0 * std::f32::consts::PI - angle_diff;
+                            }
 
-                            // Calculate ideal position at target distance and ideal angle
-                            let ideal_pos = Vec2::new(
-                                pos.x + ideal_angle.cos() * pm::S32_BOND_REST_LENGTH,
-                                pos.y + ideal_angle.sin() * pm::S32_BOND_REST_LENGTH,
-                            );
+                            // If angles are too close or too far, apply weak corrective force
+                            let angle_error = angle_diff - pm::S32_RING_ANGLE_IDEAL;
+                            if angle_error.abs() > pm::S32_RING_ANGLE_TOLERANCE {
+                                // Very gentle angular correction (rings are flexible)
+                                let correction_strength = angle_error * pm::S32_RING_ALIGNMENT_STRENGTH * 0.5;
 
-                            // Calculate force to move neighbor toward ideal position
-                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
-                                p.position()
-                            } else {
-                                continue;
-                            };
+                                // Apply perpendicular force to adjust angle
+                                let perp1 = Vec2::new(-delta1.y, delta1.x).normalize();
+                                let perp2 = Vec2::new(-delta2.y, delta2.x).normalize();
 
-                            let displacement = ideal_pos - current_pos;
-                            let force = displacement * pm::S32_ALIGNMENT_STRENGTH;
-
-                            // Apply force to neighbor (only if not frozen)
-                            if let Some(neighbor) = &self.protons[neighbor_idx] {
-                                if !neighbor.is_s32_crystallized() {
-                                    forces[neighbor_idx] += force;
-                                }
+                                forces[bond1_idx] += perp1 * correction_strength;
+                                forces[bond2_idx] -= perp2 * correction_strength;
                             }
                         }
                     }
                 } else {
-                    // For other bond counts, apply simple radial forces
+                    // Partial bonds - just maintain radial distance
                     for &bond_idx in bonds {
                         if let Some(bonded) = &self.protons[bond_idx] {
                             let delta = bonded.position() - *pos;
                             let dist = delta.length();
                             if dist > 0.1 {
                                 let radial_displacement = dist - pm::S32_BOND_REST_LENGTH;
-                                let radial_force = (delta / dist) * (radial_displacement * pm::S32_BOND_STRENGTH * 0.1);
+                                let radial_force = (delta / dist) * (radial_displacement * pm::S32_BOND_STRENGTH * 0.15);
                                 forces[bond_idx] += radial_force;
                             }
                         }
@@ -2429,7 +2494,7 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.s32_crystal_bonds();
-                if bonds.len() >= pm::S32_MIN_NEIGHBORS {
+                if bonds.len() >= pm::S32_BONDS_PER_ATOM {  // Exactly 2 bonds for S₈ rings
                     let all_frozen = bonds.iter().all(|&idx| {
                         if let Some(p) = &self.protons[idx] {
                             p.is_s32_crystallized()
@@ -2460,6 +2525,282 @@ impl ProtonManager {
 
         // ===== PHASE 8: Melting mechanics =====
         // TODO: Add melting for S32
+    }
+
+    /// He3 crystallization - ultra-weak noble gas, barely bonds
+    fn update_he3_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all He3 atoms =====
+        let mut he3_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 1 && proton.neutron_count() == 2 {
+                    he3_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation (ultra-low threshold) =====
+        for (idx, _, vel) in &he3_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_he3_crystallized() {
+                    pm::HE3_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::HE3_EVAPORATION_SPEED
+                }
+            } else {
+                pm::HE3_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_he3_crystallized(false);
+                    proton.clear_he3_crystal_bonds();
+                    proton.set_he3_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &he3_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.he3_freeze_cooldown() > 0.0 || !proton.is_he3_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_he3_crystallized(false);
+                        p.clear_he3_crystal_bonds();
+                        p.set_he3_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (close-packed, 6-8 neighbors) =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..he3_atoms.len() {
+            for j in (i + 1)..he3_atoms.len() {
+                let (idx1, pos1, _) = he3_atoms[i];
+                let (idx2, pos2, _) = he3_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::HE3_MIN_SPACING && dist < pm::HE3_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &he3_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.he3_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::HE3_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(8.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_he3_crystallized(true);
+                    proton.set_he3_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_he3_crystallized(false);
+                    proton.clear_he3_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply ultra-weak distance-based forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &he3_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_he3_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.he3_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::HE3_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::HE3_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.charge() == 1 && proton.neutron_count() == 2 && proton.is_he3_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// He4 crystallization - ultra-weak noble gas, slightly stronger than He3
+    fn update_he4_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all He4 atoms =====
+        let mut he4_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_stable_helium4() {
+                    he4_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &he4_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_he4_crystallized() {
+                    pm::HE4_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::HE4_EVAPORATION_SPEED
+                }
+            } else {
+                pm::HE4_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_he4_crystallized(false);
+                    proton.clear_he4_crystal_bonds();
+                    proton.set_he4_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &he4_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.he4_freeze_cooldown() > 0.0 || !proton.is_he4_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_he4_crystallized(false);
+                        p.clear_he4_crystal_bonds();
+                        p.set_he4_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..he4_atoms.len() {
+            for j in (i + 1)..he4_atoms.len() {
+                let (idx1, pos1, _) = he4_atoms[i];
+                let (idx2, pos2, _) = he4_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::HE4_MIN_SPACING && dist < pm::HE4_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &he4_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.he4_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::HE4_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(8.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_he4_crystallized(true);
+                    proton.set_he4_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_he4_crystallized(false);
+                    proton.clear_he4_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply ultra-weak distance-based forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &he4_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_he4_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.he4_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::HE4_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::HE4_BOND_STRENGTH * 0.12);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_stable_helium4() && proton.is_he4_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
+            }
+        }
     }
 
     /// Update O16 molecular bonds (spring forces and breaking)

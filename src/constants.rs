@@ -206,73 +206,82 @@ pub mod proton_manager {
     pub const H_EVAPORATION_SPEED: f32 = 60.0; // Speed threshold for H to evaporate (break bonds)
     pub const H_FROZEN_EVAPORATION_SPEED: f32 = 150.0; // Much higher threshold for crystallized H
 
-    // He3 crystallization (noble gas - weak bonds, face-centered cubic)
-    pub const HE3_NEIGHBOR_DISTANCE: f32 = 70.0;
-    pub const HE3_MIN_SPACING: f32 = 35.0;
-    pub const HE3_BOND_STRENGTH: f32 = 15.0; // Weak (noble gas) but stronger than before
-    pub const HE3_BOND_REST_LENGTH: f32 = 50.0;
-    pub const HE3_EVAPORATION_SPEED: f32 = 40.0; // Easier to evaporate
-    pub const HE3_FROZEN_EVAPORATION_SPEED: f32 = 100.0;
-    pub const HE3_FREEZE_COOLDOWN: f32 = 5.0;
-    pub const HE3_MIN_NEIGHBORS: usize = 4; // 4-fold cubic coordination
+    // He3 crystallization (noble gas - ultra-weak bonds, barely touch, face-centered cubic)
+    pub const HE3_NEIGHBOR_DISTANCE: f32 = 65.0;
+    pub const HE3_MIN_SPACING: f32 = 30.0;
+    pub const HE3_BOND_STRENGTH: f32 = 3.0; // Ultra-weak (noble gas) - barely bonds
+    pub const HE3_BOND_REST_LENGTH: f32 = 48.0;
+    pub const HE3_EVAPORATION_SPEED: f32 = 10.0; // Evaporates at slightest movement
+    pub const HE3_FROZEN_EVAPORATION_SPEED: f32 = 30.0;
+    pub const HE3_FREEZE_COOLDOWN: f32 = 3.0;
+    pub const HE3_MIN_NEIGHBORS: usize = 6; // Close-packed (trying for 12, but 6-8 in 2D)
 
-    // He4 crystallization (noble gas - similar to He3, slightly stronger)
-    pub const HE4_NEIGHBOR_DISTANCE: f32 = 75.0;
-    pub const HE4_MIN_SPACING: f32 = 38.0;
-    pub const HE4_BOND_STRENGTH: f32 = 20.0; // Weak (noble gas) but stronger
-    pub const HE4_BOND_REST_LENGTH: f32 = 52.0;
-    pub const HE4_EVAPORATION_SPEED: f32 = 45.0;
-    pub const HE4_FROZEN_EVAPORATION_SPEED: f32 = 110.0;
-    pub const HE4_FREEZE_COOLDOWN: f32 = 6.0;
-    pub const HE4_MIN_NEIGHBORS: usize = 4;
-    // He4 angular geometry (tetrahedral -> 4-fold at 90° in 2D)
-    pub const HE4_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
-    pub const HE4_ANGLE_TOLERANCE: f32 = 0.5; // ~28 degrees
-    pub const HE4_ALIGNMENT_STRENGTH: f32 = 3.0;
+    // He4 crystallization (noble gas - ultra-weak, slightly less reluctant than He3)
+    pub const HE4_NEIGHBOR_DISTANCE: f32 = 70.0;
+    pub const HE4_MIN_SPACING: f32 = 33.0;
+    pub const HE4_BOND_STRENGTH: f32 = 5.0; // Ultra-weak (noble gas)
+    pub const HE4_BOND_REST_LENGTH: f32 = 50.0;
+    pub const HE4_EVAPORATION_SPEED: f32 = 12.0; // Evaporates very easily
+    pub const HE4_FROZEN_EVAPORATION_SPEED: f32 = 35.0;
+    pub const HE4_FREEZE_COOLDOWN: f32 = 3.0;
+    pub const HE4_MIN_NEIGHBORS: usize = 6; // Close-packed (6-8 neighbors in 2D)
+    // He4 has no strict angular geometry - just distance-based close packing
+    pub const HE4_ANGLE_SPACING: f32 = 1.0472; // 60 degrees for hexagonal close-pack approximation
+    pub const HE4_ANGLE_TOLERANCE: f32 = 1.57; // ~90 degrees - extremely flexible, no real preference
+    pub const HE4_ALIGNMENT_STRENGTH: f32 = 0.5; // Barely any angular force
 
-    // C12 crystallization (graphite/diamond - very strong bonds)
+    // C12 crystallization (DUAL MODE: graphite OR diamond based on pressure)
     pub const C12_NEIGHBOR_DISTANCE: f32 = 90.0;
     pub const C12_MIN_SPACING: f32 = 45.0;
-    pub const C12_BOND_STRENGTH: f32 = 80.0; // Very strong covalent bonds (graphite/diamond)
+    pub const C12_BOND_STRENGTH_GRAPHITE: f32 = 65.0; // Strong covalent (graphite)
+    pub const C12_BOND_STRENGTH_DIAMOND: f32 = 120.0; // Ultra-strong covalent (diamond)
     pub const C12_BOND_REST_LENGTH: f32 = 60.0;
     pub const C12_EVAPORATION_SPEED: f32 = 100.0; // Hard to evaporate
     pub const C12_FROZEN_EVAPORATION_SPEED: f32 = 250.0;
     pub const C12_FREEZE_COOLDOWN: f32 = 12.0;
-    pub const C12_MIN_NEIGHBORS: usize = 3; // 3-fold for graphite, can upgrade to 4 for diamond
-    // C12 angular geometry (graphite = 3 neighbors at 120°)
-    pub const C12_ANGLE_SPACING: f32 = 2.0944; // 120 degrees in radians (2*PI/3)
-    pub const C12_ANGLE_TOLERANCE: f32 = 0.35; // ~20 degrees
-    pub const C12_ALIGNMENT_STRENGTH: f32 = 6.0;
+    pub const C12_MIN_NEIGHBORS_GRAPHITE: usize = 3; // 3-fold for graphite (120° flat sheets)
+    pub const C12_MIN_NEIGHBORS_DIAMOND: usize = 4; // 4-fold for diamond (tetrahedral 3D)
+    // Pressure detection for graphite->diamond transition
+    pub const C12_PRESSURE_DETECTION_RADIUS: f32 = 120.0; // Radius to check for nearby carbons
+    pub const C12_PRESSURE_THRESHOLD: usize = 8; // Number of nearby carbons to trigger diamond mode
+    // C12 angular geometry - GRAPHITE mode (3 neighbors at 120°)
+    pub const C12_ANGLE_SPACING_GRAPHITE: f32 = 2.0944; // 120 degrees in radians (2*PI/3)
+    pub const C12_ANGLE_TOLERANCE_GRAPHITE: f32 = 0.4; // ~23 degrees - semi-rigid
+    pub const C12_ALIGNMENT_STRENGTH_GRAPHITE: f32 = 5.0;
+    // C12 angular geometry - DIAMOND mode (4 neighbors at 90° - 2D approximation of tetrahedral)
+    pub const C12_ANGLE_SPACING_DIAMOND: f32 = 1.5708; // 90 degrees (PI/2) - 2D tetrahedral approximation
+    pub const C12_ANGLE_TOLERANCE_DIAMOND: f32 = 0.3; // ~17 degrees - ultra-rigid
+    pub const C12_ALIGNMENT_STRENGTH_DIAMOND: f32 = 10.0; // Very strong - hardest material
 
-    // Ne20 crystallization (noble gas - weak bonds, face-centered cubic)
-    pub const NE20_NEIGHBOR_DISTANCE: f32 = 85.0;
-    pub const NE20_MIN_SPACING: f32 = 42.0;
-    pub const NE20_BOND_STRENGTH: f32 = 25.0; // Weak (noble gas) but stronger
-    pub const NE20_BOND_REST_LENGTH: f32 = 55.0;
-    pub const NE20_EVAPORATION_SPEED: f32 = 50.0;
-    pub const NE20_FROZEN_EVAPORATION_SPEED: f32 = 120.0;
-    pub const NE20_FREEZE_COOLDOWN: f32 = 7.0;
-    pub const NE20_MIN_NEIGHBORS: usize = 4;
-    // Ne20 angular geometry (face-centered cubic = 4 neighbors at 90°)
-    pub const NE20_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
-    pub const NE20_ANGLE_TOLERANCE: f32 = 0.5; // ~28 degrees
-    pub const NE20_ALIGNMENT_STRENGTH: f32 = 3.0;
+    // Ne20 crystallization (noble gas - weak bonds, barely crystallizes, face-centered cubic)
+    pub const NE20_NEIGHBOR_DISTANCE: f32 = 80.0;
+    pub const NE20_MIN_SPACING: f32 = 38.0;
+    pub const NE20_BOND_STRENGTH: f32 = 8.0; // Very weak (noble gas) - slightly stronger than He
+    pub const NE20_BOND_REST_LENGTH: f32 = 52.0;
+    pub const NE20_EVAPORATION_SPEED: f32 = 15.0; // Low threshold - breaks easily
+    pub const NE20_FROZEN_EVAPORATION_SPEED: f32 = 40.0;
+    pub const NE20_FREEZE_COOLDOWN: f32 = 4.0;
+    pub const NE20_MIN_NEIGHBORS: usize = 6; // Close-packed (6-8 neighbors in 2D)
+    // Ne20 has minimal angular geometry - mostly distance-based close packing
+    pub const NE20_ANGLE_SPACING: f32 = 1.0472; // 60 degrees for hexagonal close-pack
+    pub const NE20_ANGLE_TOLERANCE: f32 = 1.4; // ~80 degrees - very flexible
+    pub const NE20_ALIGNMENT_STRENGTH: f32 = 1.0; // Weak angular force
 
-    // Mg24 crystallization (metal - hexagonal close-packed)
-    pub const MG24_NEIGHBOR_DISTANCE: f32 = 100.0;
-    pub const MG24_MIN_SPACING: f32 = 50.0;
-    pub const MG24_BOND_STRENGTH: f32 = 60.0; // Strong metallic bonding
+    // Mg24 crystallization (metal - hexagonal close-packed, FLEXIBLE bonds)
+    pub const MG24_NEIGHBOR_DISTANCE: f32 = 110.0; // Increased - bonds can stretch
+    pub const MG24_MIN_SPACING: f32 = 45.0;
+    pub const MG24_BOND_STRENGTH: f32 = 40.0; // Moderate - bonds bend not break
     pub const MG24_BOND_REST_LENGTH: f32 = 65.0;
-    pub const MG24_EVAPORATION_SPEED: f32 = 80.0;
-    pub const MG24_FROZEN_EVAPORATION_SPEED: f32 = 200.0;
+    pub const MG24_EVAPORATION_SPEED: f32 = 110.0; // Higher - harder to break metallic bonds
+    pub const MG24_FROZEN_EVAPORATION_SPEED: f32 = 220.0;
     pub const MG24_FREEZE_COOLDOWN: f32 = 10.0;
-    pub const MG24_MIN_NEIGHBORS: usize = 6; // Hexagonal close-packed
-    // Mg24 angular geometry (hexagonal = 6 neighbors at 60°)
+    pub const MG24_MIN_NEIGHBORS: usize = 4; // Flexible coordination (4-8 neighbors acceptable)
+    // Mg24 angular geometry (hexagonal = 6 neighbors at 60°, but VERY flexible)
     pub const MG24_ANGLE_SPACING: f32 = 1.0472; // 60 degrees in radians (PI/3)
-    pub const MG24_ANGLE_TOLERANCE: f32 = 0.35; // ~20 degrees
-    pub const MG24_ALIGNMENT_STRENGTH: f32 = 8.0;
+    pub const MG24_ANGLE_TOLERANCE: f32 = 0.8; // ~45 degrees - very flexible, metallic flow
+    pub const MG24_ALIGNMENT_STRENGTH: f32 = 2.5; // Low - bonds bend and deform easily
 
-    // Si28 crystallization (semiconductor - diamond cubic structure)
+    // Si28 crystallization (semiconductor - diamond cubic structure with TETRAHEDRAL 109.5° angles)
     pub const SI28_NEIGHBOR_DISTANCE: f32 = 95.0;
     pub const SI28_MIN_SPACING: f32 = 48.0;
     pub const SI28_BOND_STRENGTH: f32 = 70.0; // Strong covalent bonds (diamond cubic)
@@ -280,25 +289,28 @@ pub mod proton_manager {
     pub const SI28_EVAPORATION_SPEED: f32 = 90.0;
     pub const SI28_FROZEN_EVAPORATION_SPEED: f32 = 220.0;
     pub const SI28_FREEZE_COOLDOWN: f32 = 11.0;
-    pub const SI28_MIN_NEIGHBORS: usize = 4; // Tetrahedral diamond cubic
-    // Si28 angular geometry (diamond cubic = 4 neighbors at 90°)
-    pub const SI28_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
-    pub const SI28_ANGLE_TOLERANCE: f32 = 0.5; // ~28 degrees
-    pub const SI28_ALIGNMENT_STRENGTH: f32 = 5.0;
+    pub const SI28_MIN_NEIGHBORS: usize = 4; // Tetrahedral diamond cubic (always exactly 4)
+    // Si28 angular geometry (TETRAHEDRAL = 4 neighbors, alternating up/down in 2D to simulate 3D)
+    // In 2D we approximate tetrahedral as alternating 90° (like a checkerboard depth pattern)
+    pub const SI28_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2) - 2D approximation of 3D tetrahedral
+    pub const SI28_ANGLE_TOLERANCE: f32 = 0.4; // ~23 degrees - rigid covalent
+    pub const SI28_ALIGNMENT_STRENGTH: f32 = 6.0; // Strong - rigid structure
 
-    // S32 crystallization (non-metal - orthorhombic structure)
-    pub const S32_NEIGHBOR_DISTANCE: f32 = 88.0;
-    pub const S32_MIN_SPACING: f32 = 44.0;
-    pub const S32_BOND_STRENGTH: f32 = 45.0; // Moderate bonds (stronger than before)
-    pub const S32_BOND_REST_LENGTH: f32 = 58.0;
-    pub const S32_EVAPORATION_SPEED: f32 = 55.0;
-    pub const S32_FROZEN_EVAPORATION_SPEED: f32 = 140.0;
+    // S32 crystallization (S₈ RING FORMATION - completely different from other elements!)
+    pub const S32_NEIGHBOR_DISTANCE: f32 = 75.0; // Distance for finding ring partners
+    pub const S32_MIN_SPACING: f32 = 40.0;
+    pub const S32_BOND_STRENGTH: f32 = 50.0; // Moderate covalent bonds within rings
+    pub const S32_BOND_REST_LENGTH: f32 = 55.0; // Distance between bonded S atoms in ring
+    pub const S32_EVAPORATION_SPEED: f32 = 65.0; // Speed to break ring
+    pub const S32_FROZEN_EVAPORATION_SPEED: f32 = 150.0;
     pub const S32_FREEZE_COOLDOWN: f32 = 8.0;
-    pub const S32_MIN_NEIGHBORS: usize = 4; // Variable coordination in orthorhombic
-    // S32 angular geometry (orthorhombic = mix of 90° and 120°, use 90° for 4 neighbors)
-    pub const S32_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
-    pub const S32_ANGLE_TOLERANCE: f32 = 0.6; // ~34 degrees - more relaxed for irregular structure
-    pub const S32_ALIGNMENT_STRENGTH: f32 = 4.0;
+    pub const S32_BONDS_PER_ATOM: usize = 2; // Each S atom wants EXACTLY 2 bonds (not 4!)
+    pub const S32_RING_SIZE: usize = 8; // S₈ crown rings (8 atoms per ring)
+    pub const S32_RING_DETECTION_DEPTH: usize = 10; // Max path length for ring search
+    // S₈ ring geometry (crown-shaped, flexible ring angles)
+    pub const S32_RING_ANGLE_IDEAL: f32 = 1.8326; // ~105 degrees - internal angle of S₈ crown
+    pub const S32_RING_ANGLE_TOLERANCE: f32 = 0.7; // ~40 degrees - rings are flexible
+    pub const S32_RING_ALIGNMENT_STRENGTH: f32 = 3.5; // Moderate - maintain ring shape
 }
 
 // ===== ATOM PHYSICS =====
