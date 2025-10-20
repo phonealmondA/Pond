@@ -85,9 +85,6 @@ impl ProtonManager {
         // STEP 2.8: Water hydrogen bonds (polarity-based bonding)
         self.update_water_hydrogen_bonds(delta_time);
 
-        // STEP 3: Solid collisions (H and He4)
-        self.handle_solid_collisions();
-
         // STEP 4: Neutron formation (proximity to atoms)
         for i in 0..self.protons.len() {
             // First, collect info about the proton
@@ -141,8 +138,12 @@ impl ProtonManager {
             }
         }
 
-        // STEP 6: Nuclear fusion
+        // STEP 6: Nuclear fusion (must happen before solid collisions to allow reactions)
         self.handle_nuclear_fusion(ring_manager);
+
+        // STEP 6.5: Solid collisions (H+, H-, H, He4, etc. bounce like walls at close range)
+        // This happens AFTER fusion so reactions can occur first
+        self.handle_solid_collisions();
 
         // STEP 7: Spawn from atom collisions
         self.detect_and_spawn_from_atom_collisions(atom_manager);
@@ -532,12 +533,12 @@ impl ProtonManager {
 
     /// Apply charge-based forces between protons
     fn apply_charge_forces(&mut self, delta_time: f32) {
-        // Collect all charged proton data (H+ and H-)
-        let mut charged_protons: Vec<(usize, Vec2, i32, f32)> = Vec::new();
-        // Collect neutral H (deuterium) data
-        let mut neutral_h: Vec<(usize, Vec2, f32)> = Vec::new();
-        // Collect He4 data
-        let mut he4_protons: Vec<(usize, Vec2, f32)> = Vec::new();
+        // Collect all charged proton data (H+ and H-) - now including radius for bounce threshold
+        let mut charged_protons: Vec<(usize, Vec2, i32, f32, f32)> = Vec::new();
+        // Collect neutral H (deuterium) data - now including radius
+        let mut neutral_h: Vec<(usize, Vec2, f32, f32)> = Vec::new();
+        // Collect He4 data - now including radius
+        let mut he4_protons: Vec<(usize, Vec2, f32, f32)> = Vec::new();
 
         for (i, proton_opt) in self.protons.iter().enumerate() {
             if let Some(proton) = proton_opt {
@@ -547,15 +548,15 @@ impl ProtonManager {
 
                     // H+ (charge=1) and H- (charge=-1) participate in charge forces
                     if charge == 1 || charge == -1 {
-                        charged_protons.push((i, proton.position(), charge, proton.mass()));
+                        charged_protons.push((i, proton.position(), charge, proton.mass(), proton.radius()));
                     }
                     // H (charge=0, neutron=1) participates in clustering
                     else if charge == 0 && neutron_count == 1 {
-                        neutral_h.push((i, proton.position(), proton.mass()));
+                        neutral_h.push((i, proton.position(), proton.mass(), proton.radius()));
                     }
                     // He4 (charge=2, neutron=2) participates in clustering
                     else if charge == 2 && neutron_count == 2 {
-                        he4_protons.push((i, proton.position(), proton.mass()));
+                        he4_protons.push((i, proton.position(), proton.mass(), proton.radius()));
                     }
                 }
             }
@@ -566,8 +567,8 @@ impl ProtonManager {
 
         for i in 0..charged_protons.len() {
             for j in (i + 1)..charged_protons.len() {
-                let (idx1, pos1, charge1, mass1) = charged_protons[i];
-                let (idx2, pos2, charge2, mass2) = charged_protons[j];
+                let (idx1, pos1, charge1, mass1, r1) = charged_protons[i];
+                let (idx2, pos2, charge2, mass2, r2) = charged_protons[j];
 
                 let delta = pos2 - pos1;
                 let dist_squared = delta.length_squared();
@@ -575,6 +576,13 @@ impl ProtonManager {
 
                 // Skip if too far apart
                 if dist > pm::CHARGE_INTERACTION_RANGE {
+                    continue;
+                }
+
+                // Skip if within bounce distance - forces must stop at same threshold where bouncing starts
+                // Bounce threshold = r1 + r2 + PROTON_BOUNCE_DISTANCE
+                let bounce_threshold = r1 + r2 + pm::PROTON_BOUNCE_DISTANCE;
+                if dist < bounce_threshold {
                     continue;
                 }
 
@@ -605,8 +613,8 @@ impl ProtonManager {
         // Calculate H attraction forces (neutral deuterium clustering)
         for i in 0..neutral_h.len() {
             for j in (i + 1)..neutral_h.len() {
-                let (idx1, pos1, _mass1) = neutral_h[i];
-                let (idx2, pos2, _mass2) = neutral_h[j];
+                let (idx1, pos1, _mass1, r1) = neutral_h[i];
+                let (idx2, pos2, _mass2, r2) = neutral_h[j];
 
                 let delta = pos2 - pos1;
                 let dist_squared = delta.length_squared();
@@ -614,6 +622,12 @@ impl ProtonManager {
 
                 // Skip if too far apart
                 if dist > pm::H_ATTRACTION_RANGE {
+                    continue;
+                }
+
+                // Skip if within bounce distance - forces must stop at same threshold where bouncing starts
+                let bounce_threshold = r1 + r2 + pm::PROTON_BOUNCE_DISTANCE;
+                if dist < bounce_threshold {
                     continue;
                 }
 
@@ -637,8 +651,8 @@ impl ProtonManager {
         // Calculate He4 attraction forces (helium clustering)
         for i in 0..he4_protons.len() {
             for j in (i + 1)..he4_protons.len() {
-                let (idx1, pos1, _mass1) = he4_protons[i];
-                let (idx2, pos2, _mass2) = he4_protons[j];
+                let (idx1, pos1, _mass1, r1) = he4_protons[i];
+                let (idx2, pos2, _mass2, r2) = he4_protons[j];
 
                 let delta = pos2 - pos1;
                 let dist_squared = delta.length_squared();
@@ -646,6 +660,12 @@ impl ProtonManager {
 
                 // Skip if too far apart
                 if dist > pm::HE4_ATTRACTION_RANGE {
+                    continue;
+                }
+
+                // Skip if within bounce distance - forces must stop at same threshold where bouncing starts
+                let bounce_threshold = r1 + r2 + pm::PROTON_BOUNCE_DISTANCE;
+                if dist < bounce_threshold {
                     continue;
                 }
 
@@ -3689,10 +3709,13 @@ impl ProtonManager {
                         continue;
                     }
 
-                    // H (charge=0, neutron=1), He4 (charge=2, neutron=2), and C12 (charge=6, neutron=6) are solid
-                    if (charge == 0 && neutron_count == 1)
-                        || (charge == 2 && neutron_count == 2)
-                        || (charge == 6 && neutron_count == 6) {
+                    // H+ (charge=1), H- (charge=-1), H (charge=0, neutron=1), He4 (charge=2, neutron=2), and C12 (charge=6, neutron=6) are solid
+                    if charge == 1  // H+ protons
+                        || charge == -1  // H- protons
+                        || (charge == 0 && neutron_count == 1)  // H neutral
+                        || (charge == 2 && neutron_count == 2)  // He4
+                        || (charge == 6 && neutron_count == 6)  // C12
+                    {
                         solid_protons.push((
                             i,
                             proton.position(),
@@ -3713,10 +3736,12 @@ impl ProtonManager {
 
                 let delta = pos2 - pos1;
                 let dist = delta.length();
-                let collision_dist = r1 + r2;
 
-                // Check if colliding
-                if dist < collision_dist && dist > 0.1 {
+                // Bounce distance = radii sum + extra bounce distance (1-2 pixels)
+                let bounce_threshold = r1 + r2 + pm::PROTON_BOUNCE_DISTANCE;
+
+                // Check if within bounce range
+                if dist < bounce_threshold && dist > 0.1 {
                     let normal = delta / dist;
 
                     // Calculate relative velocity
@@ -3728,17 +3753,19 @@ impl ProtonManager {
                         continue;
                     }
 
-                    // Calculate impulse
-                    let elasticity = pm::COLLISION_ELASTICITY;
+                    // Use proton bounce dampening for close-range bounces (like a wall)
+                    let elasticity = pm::PROTON_BOUNCE_DAMPENING;
                     let impulse_magnitude = -(1.0 + elasticity) * vel_along_normal / (1.0 / m1 + 1.0 / m2);
                     let impulse = normal * impulse_magnitude;
 
-                    // Apply impulse to both protons
+                    // Apply impulse to both protons (impulse points from p2 to p1)
+                    // p1 should be pushed in direction of impulse (away from p2)
+                    // p2 should be pushed opposite to impulse (away from p1)
                     if let Some(p1) = &mut self.protons[idx1] {
-                        p1.add_velocity(-impulse / m1);
+                        p1.add_velocity(impulse / m1);
                     }
                     if let Some(p2) = &mut self.protons[idx2] {
-                        p2.add_velocity(impulse / m2);
+                        p2.add_velocity(-impulse / m2);
                     }
                 }
             }

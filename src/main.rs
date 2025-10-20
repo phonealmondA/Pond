@@ -283,6 +283,7 @@ fn draw_controls_menu(fps: f32, ring_manager: &RingManager, atom_manager: &AtomM
         "Left Click: Spawn energy ring",
         "Right Click & Drag: Spawn selected element with velocity",
         "Color Slider (bottom): Click/drag to change ring color",
+        "Mouse Wheel: Cycle through ring colors",
         "R: Clear all non-stable particles",
         "Space: Clear all non-stable particles",
         "H: Delete all stable hydrogen",
@@ -579,6 +580,16 @@ async fn main() {
             // Stop dragging slider
             if is_mouse_button_released(MouseButton::Left) {
                 color_slider.is_dragging = false;
+            }
+
+            // Mouse wheel color cycling
+            let mouse_wheel = mouse_wheel();
+            if mouse_wheel.1 > 0.0 {
+                // Mouse wheel up - next color
+                ring_manager.cycle_to_next_color();
+            } else if mouse_wheel.1 < 0.0 {
+                // Mouse wheel down - previous color
+                ring_manager.cycle_to_previous_color();
             }
         }
 

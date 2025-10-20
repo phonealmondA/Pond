@@ -382,6 +382,16 @@ impl RingManager {
         self.current_color = self.colors[self.current_color_index];
     }
 
+    /// Cycle to previous color in the palette
+    pub fn cycle_to_previous_color(&mut self) {
+        if self.current_color_index == 0 {
+            self.current_color_index = self.colors.len() - 1;
+        } else {
+            self.current_color_index -= 1;
+        }
+        self.current_color = self.colors[self.current_color_index];
+    }
+
     /// Get current color
     pub fn get_current_color(&self) -> Color {
         self.current_color

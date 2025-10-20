@@ -19,12 +19,12 @@ pub const COLOR_MAX: f32 = 255.0;
 pub mod proton {
     // Movement
     pub const FRICTION: f32 = 1.0;
-    pub const BOUNCE_DAMPENING: f32 = 0.7;
+    pub const BOUNCE_DAMPENING: f32 = 1.0;
     pub const MAX_SPEED: f32 = 200.0;  // Same as white ring speed
 
     // Size
     pub const MIN_RADIUS: f32 = 3.0;
-    pub const MAX_RADIUS: f32 = 8.0;
+    pub const MAX_RADIUS: f32 = 7.0;
     pub const ENERGY_TO_RADIUS_FACTOR: f32 = 0.01;
 
     // Mass and Energy
@@ -156,6 +156,10 @@ pub mod proton_manager {
     pub const CHARGE_INTERACTION_RANGE: f32 = 150.0;
     pub const CHARGE_REPULSION_STRENGTH: f32 = 1000.0;
     pub const CHARGE_ATTRACTION_STRENGTH: f32 = 800.0;
+
+    // Proton bounce behavior at close distances (1-2 pixels)
+    pub const PROTON_BOUNCE_DISTANCE: f32 = 1.5;  // Distance at which protons bounce instead of applying forces
+    pub const PROTON_BOUNCE_DAMPENING: f32 = 1.0;  // Bounce dampening factor (1.0 = perfect bounce, 0.0 = no bounce)
 
     // H (neutral deuterium) clustering forces
     pub const H_ATTRACTION_RANGE: f32 = 1100.0;
