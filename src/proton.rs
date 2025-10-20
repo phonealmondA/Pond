@@ -38,6 +38,7 @@ pub struct Proton {
     red_wave_hits: u8, // Count of dark red wave hits (for melting)
     freeze_cooldown: f32, // Time before can crystallize again after melting
     last_red_wave_hit_time: f32, // Tracks time of last hit to prevent double-counting
+    h_crystal_group: Option<usize>, // Group ID for connected H crystals (for rigid body movement)
 
     // Oxygen-16 bonding system (C12 + He4 molecular bond)
     is_oxygen16_bonded: bool,
@@ -69,6 +70,49 @@ pub struct Proton {
     is_mgh2: bool,     // Magnesium Hydride (Mg24 + 2H)
     is_ch4: bool,      // Methane (C12 + 4H)
     is_sih4: bool,     // Silane (Si28 + 4H)
+
+    // Universal phase transition system for all elements
+    // He3 (charge=1, neutron_count=2) phase transitions
+    is_he3_crystallized: bool,
+    he3_crystal_bonds: Vec<usize>,
+    he3_crystal_group: Option<usize>,
+    he3_freeze_cooldown: f32,
+
+    // He4 (charge=2, neutron_count=2) phase transitions
+    is_he4_crystallized: bool,
+    he4_crystal_bonds: Vec<usize>,
+    he4_crystal_group: Option<usize>,
+    he4_freeze_cooldown: f32,
+
+    // C12 (charge=6, neutron_count=6) phase transitions
+    is_c12_crystallized: bool,
+    c12_crystal_bonds: Vec<usize>,
+    c12_crystal_group: Option<usize>,
+    c12_freeze_cooldown: f32,
+
+    // Ne20 phase transitions
+    is_ne20_crystallized: bool,
+    ne20_crystal_bonds: Vec<usize>,
+    ne20_crystal_group: Option<usize>,
+    ne20_freeze_cooldown: f32,
+
+    // Mg24 phase transitions
+    is_mg24_crystallized: bool,
+    mg24_crystal_bonds: Vec<usize>,
+    mg24_crystal_group: Option<usize>,
+    mg24_freeze_cooldown: f32,
+
+    // Si28 phase transitions
+    is_si28_crystallized: bool,
+    si28_crystal_bonds: Vec<usize>,
+    si28_crystal_group: Option<usize>,
+    si28_freeze_cooldown: f32,
+
+    // S32 phase transitions
+    is_s32_crystallized: bool,
+    s32_crystal_bonds: Vec<usize>,
+    s32_crystal_group: Option<usize>,
+    s32_freeze_cooldown: f32,
 }
 
 impl Proton {
@@ -102,6 +146,7 @@ impl Proton {
             red_wave_hits: 0,
             freeze_cooldown: 0.0,
             last_red_wave_hit_time: -999.0,
+            h_crystal_group: None,
             is_oxygen16_bonded: false,
             oxygen_bond_partner: None,
             oxygen_bond_rest_length: 0.0,
@@ -119,6 +164,35 @@ impl Proton {
             is_mgh2: false,
             is_ch4: false,
             is_sih4: false,
+            // Phase transition initializations
+            is_he3_crystallized: false,
+            he3_crystal_bonds: Vec::new(),
+            he3_crystal_group: None,
+            he3_freeze_cooldown: 0.0,
+            is_he4_crystallized: false,
+            he4_crystal_bonds: Vec::new(),
+            he4_crystal_group: None,
+            he4_freeze_cooldown: 0.0,
+            is_c12_crystallized: false,
+            c12_crystal_bonds: Vec::new(),
+            c12_crystal_group: None,
+            c12_freeze_cooldown: 0.0,
+            is_ne20_crystallized: false,
+            ne20_crystal_bonds: Vec::new(),
+            ne20_crystal_group: None,
+            ne20_freeze_cooldown: 0.0,
+            is_mg24_crystallized: false,
+            mg24_crystal_bonds: Vec::new(),
+            mg24_crystal_group: None,
+            mg24_freeze_cooldown: 0.0,
+            is_si28_crystallized: false,
+            si28_crystal_bonds: Vec::new(),
+            si28_crystal_group: None,
+            si28_freeze_cooldown: 0.0,
+            is_s32_crystallized: false,
+            s32_crystal_bonds: Vec::new(),
+            s32_crystal_group: None,
+            s32_freeze_cooldown: 0.0,
         }
     }
 
@@ -135,12 +209,42 @@ impl Proton {
             self.vibration_phase += delta_time * 5.0; // 5 rad/s
         }
 
-        // Update freeze cooldown
+        // Update freeze cooldown for H
         if self.freeze_cooldown > 0.0 {
             self.freeze_cooldown -= delta_time;
             if self.freeze_cooldown < 0.0 {
                 self.freeze_cooldown = 0.0;
             }
+        }
+
+        // Update freeze cooldowns for all elements
+        if self.he3_freeze_cooldown > 0.0 {
+            self.he3_freeze_cooldown -= delta_time;
+            if self.he3_freeze_cooldown < 0.0 { self.he3_freeze_cooldown = 0.0; }
+        }
+        if self.he4_freeze_cooldown > 0.0 {
+            self.he4_freeze_cooldown -= delta_time;
+            if self.he4_freeze_cooldown < 0.0 { self.he4_freeze_cooldown = 0.0; }
+        }
+        if self.c12_freeze_cooldown > 0.0 {
+            self.c12_freeze_cooldown -= delta_time;
+            if self.c12_freeze_cooldown < 0.0 { self.c12_freeze_cooldown = 0.0; }
+        }
+        if self.ne20_freeze_cooldown > 0.0 {
+            self.ne20_freeze_cooldown -= delta_time;
+            if self.ne20_freeze_cooldown < 0.0 { self.ne20_freeze_cooldown = 0.0; }
+        }
+        if self.mg24_freeze_cooldown > 0.0 {
+            self.mg24_freeze_cooldown -= delta_time;
+            if self.mg24_freeze_cooldown < 0.0 { self.mg24_freeze_cooldown = 0.0; }
+        }
+        if self.si28_freeze_cooldown > 0.0 {
+            self.si28_freeze_cooldown -= delta_time;
+            if self.si28_freeze_cooldown < 0.0 { self.si28_freeze_cooldown = 0.0; }
+        }
+        if self.s32_freeze_cooldown > 0.0 {
+            self.s32_freeze_cooldown -= delta_time;
+            if self.s32_freeze_cooldown < 0.0 { self.s32_freeze_cooldown = 0.0; }
         }
 
         // SLEEPING OPTIMIZATION
@@ -483,6 +587,85 @@ impl Proton {
     pub fn set_freeze_cooldown(&mut self, cooldown: f32) { self.freeze_cooldown = cooldown; }
     pub fn last_red_wave_hit_time(&self) -> f32 { self.last_red_wave_hit_time }
     pub fn set_last_red_wave_hit_time(&mut self, time: f32) { self.last_red_wave_hit_time = time; }
+    pub fn h_crystal_group(&self) -> Option<usize> { self.h_crystal_group }
+    pub fn set_h_crystal_group(&mut self, group: Option<usize>) { self.h_crystal_group = group; }
+
+    // He3 phase transition getters/setters
+    pub fn is_he3_crystallized(&self) -> bool { self.is_he3_crystallized }
+    pub fn set_he3_crystallized(&mut self, crystallized: bool) { self.is_he3_crystallized = crystallized; }
+    pub fn he3_crystal_bonds(&self) -> &Vec<usize> { &self.he3_crystal_bonds }
+    pub fn set_he3_crystal_bonds(&mut self, bonds: Vec<usize>) { self.he3_crystal_bonds = bonds; }
+    pub fn clear_he3_crystal_bonds(&mut self) { self.he3_crystal_bonds.clear(); }
+    pub fn he3_crystal_group(&self) -> Option<usize> { self.he3_crystal_group }
+    pub fn set_he3_crystal_group(&mut self, group: Option<usize>) { self.he3_crystal_group = group; }
+    pub fn he3_freeze_cooldown(&self) -> f32 { self.he3_freeze_cooldown }
+    pub fn set_he3_freeze_cooldown(&mut self, cooldown: f32) { self.he3_freeze_cooldown = cooldown; }
+
+    // He4 phase transition getters/setters
+    pub fn is_he4_crystallized(&self) -> bool { self.is_he4_crystallized }
+    pub fn set_he4_crystallized(&mut self, crystallized: bool) { self.is_he4_crystallized = crystallized; }
+    pub fn he4_crystal_bonds(&self) -> &Vec<usize> { &self.he4_crystal_bonds }
+    pub fn set_he4_crystal_bonds(&mut self, bonds: Vec<usize>) { self.he4_crystal_bonds = bonds; }
+    pub fn clear_he4_crystal_bonds(&mut self) { self.he4_crystal_bonds.clear(); }
+    pub fn he4_crystal_group(&self) -> Option<usize> { self.he4_crystal_group }
+    pub fn set_he4_crystal_group(&mut self, group: Option<usize>) { self.he4_crystal_group = group; }
+    pub fn he4_freeze_cooldown(&self) -> f32 { self.he4_freeze_cooldown }
+    pub fn set_he4_freeze_cooldown(&mut self, cooldown: f32) { self.he4_freeze_cooldown = cooldown; }
+
+    // C12 phase transition getters/setters
+    pub fn is_c12_crystallized(&self) -> bool { self.is_c12_crystallized }
+    pub fn set_c12_crystallized(&mut self, crystallized: bool) { self.is_c12_crystallized = crystallized; }
+    pub fn c12_crystal_bonds(&self) -> &Vec<usize> { &self.c12_crystal_bonds }
+    pub fn set_c12_crystal_bonds(&mut self, bonds: Vec<usize>) { self.c12_crystal_bonds = bonds; }
+    pub fn clear_c12_crystal_bonds(&mut self) { self.c12_crystal_bonds.clear(); }
+    pub fn c12_crystal_group(&self) -> Option<usize> { self.c12_crystal_group }
+    pub fn set_c12_crystal_group(&mut self, group: Option<usize>) { self.c12_crystal_group = group; }
+    pub fn c12_freeze_cooldown(&self) -> f32 { self.c12_freeze_cooldown }
+    pub fn set_c12_freeze_cooldown(&mut self, cooldown: f32) { self.c12_freeze_cooldown = cooldown; }
+
+    // Ne20 phase transition getters/setters
+    pub fn is_ne20_crystallized(&self) -> bool { self.is_ne20_crystallized }
+    pub fn set_ne20_crystallized(&mut self, crystallized: bool) { self.is_ne20_crystallized = crystallized; }
+    pub fn ne20_crystal_bonds(&self) -> &Vec<usize> { &self.ne20_crystal_bonds }
+    pub fn set_ne20_crystal_bonds(&mut self, bonds: Vec<usize>) { self.ne20_crystal_bonds = bonds; }
+    pub fn clear_ne20_crystal_bonds(&mut self) { self.ne20_crystal_bonds.clear(); }
+    pub fn ne20_crystal_group(&self) -> Option<usize> { self.ne20_crystal_group }
+    pub fn set_ne20_crystal_group(&mut self, group: Option<usize>) { self.ne20_crystal_group = group; }
+    pub fn ne20_freeze_cooldown(&self) -> f32 { self.ne20_freeze_cooldown }
+    pub fn set_ne20_freeze_cooldown(&mut self, cooldown: f32) { self.ne20_freeze_cooldown = cooldown; }
+
+    // Mg24 phase transition getters/setters
+    pub fn is_mg24_crystallized(&self) -> bool { self.is_mg24_crystallized }
+    pub fn set_mg24_crystallized(&mut self, crystallized: bool) { self.is_mg24_crystallized = crystallized; }
+    pub fn mg24_crystal_bonds(&self) -> &Vec<usize> { &self.mg24_crystal_bonds }
+    pub fn set_mg24_crystal_bonds(&mut self, bonds: Vec<usize>) { self.mg24_crystal_bonds = bonds; }
+    pub fn clear_mg24_crystal_bonds(&mut self) { self.mg24_crystal_bonds.clear(); }
+    pub fn mg24_crystal_group(&self) -> Option<usize> { self.mg24_crystal_group }
+    pub fn set_mg24_crystal_group(&mut self, group: Option<usize>) { self.mg24_crystal_group = group; }
+    pub fn mg24_freeze_cooldown(&self) -> f32 { self.mg24_freeze_cooldown }
+    pub fn set_mg24_freeze_cooldown(&mut self, cooldown: f32) { self.mg24_freeze_cooldown = cooldown; }
+
+    // Si28 phase transition getters/setters
+    pub fn is_si28_crystallized(&self) -> bool { self.is_si28_crystallized }
+    pub fn set_si28_crystallized(&mut self, crystallized: bool) { self.is_si28_crystallized = crystallized; }
+    pub fn si28_crystal_bonds(&self) -> &Vec<usize> { &self.si28_crystal_bonds }
+    pub fn set_si28_crystal_bonds(&mut self, bonds: Vec<usize>) { self.si28_crystal_bonds = bonds; }
+    pub fn clear_si28_crystal_bonds(&mut self) { self.si28_crystal_bonds.clear(); }
+    pub fn si28_crystal_group(&self) -> Option<usize> { self.si28_crystal_group }
+    pub fn set_si28_crystal_group(&mut self, group: Option<usize>) { self.si28_crystal_group = group; }
+    pub fn si28_freeze_cooldown(&self) -> f32 { self.si28_freeze_cooldown }
+    pub fn set_si28_freeze_cooldown(&mut self, cooldown: f32) { self.si28_freeze_cooldown = cooldown; }
+
+    // S32 phase transition getters/setters
+    pub fn is_s32_crystallized(&self) -> bool { self.is_s32_crystallized }
+    pub fn set_s32_crystallized(&mut self, crystallized: bool) { self.is_s32_crystallized = crystallized; }
+    pub fn s32_crystal_bonds(&self) -> &Vec<usize> { &self.s32_crystal_bonds }
+    pub fn set_s32_crystal_bonds(&mut self, bonds: Vec<usize>) { self.s32_crystal_bonds = bonds; }
+    pub fn clear_s32_crystal_bonds(&mut self) { self.s32_crystal_bonds.clear(); }
+    pub fn s32_crystal_group(&self) -> Option<usize> { self.s32_crystal_group }
+    pub fn set_s32_crystal_group(&mut self, group: Option<usize>) { self.s32_crystal_group = group; }
+    pub fn s32_freeze_cooldown(&self) -> f32 { self.s32_freeze_cooldown }
+    pub fn set_s32_freeze_cooldown(&mut self, cooldown: f32) { self.s32_freeze_cooldown = cooldown; }
 
     // Oxygen-16 bonding getters/setters
     pub fn is_oxygen16_bonded(&self) -> bool { self.is_oxygen16_bonded }

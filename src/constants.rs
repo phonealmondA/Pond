@@ -198,11 +198,83 @@ pub mod proton_manager {
     pub const H_CRYSTAL_MIN_NEIGHBORS: usize = 3; // Minimum H's to crystallize (1 center + 6 sides)
     pub const H_CRYSTAL_NEIGHBOR_DISTANCE: f32 = 80.0; // Max distance to be neighbors
     pub const H_CRYSTAL_MIN_SPACING: f32 = 40.0; // Minimum distance - too close particles cannot bond
-    pub const H_CRYSTAL_BOND_STRENGTH: f32 = 70.0; // Spring force between bonded H's (very strong)
+    pub const H_CRYSTAL_BOND_STRENGTH: f32 = 35.0; // Spring force between bonded H's (moderate strength)
     pub const H_CRYSTAL_BOND_REST_LENGTH: f32 = 45.0; // Ideal distance from center to sides
     pub const H_CRYSTAL_VIBRATION_THRESHOLD: f32 = 50.0; // Space needed to start vibrating
     pub const H_CRYSTAL_BREAKOFF_DISTANCE: f32 = 70.0; // Distance at which bonds break
     pub const H_CRYSTAL_FREEZE_COOLDOWN: f32 = 9.0; // Cooldown time before can refreeze after melting
+    pub const H_EVAPORATION_SPEED: f32 = 60.0; // Speed threshold for H to evaporate (break bonds)
+    pub const H_FROZEN_EVAPORATION_SPEED: f32 = 150.0; // Much higher threshold for crystallized H
+
+    // He3 crystallization (noble gas - weak bonds, face-centered cubic)
+    pub const HE3_NEIGHBOR_DISTANCE: f32 = 70.0;
+    pub const HE3_MIN_SPACING: f32 = 35.0;
+    pub const HE3_BOND_STRENGTH: f32 = 15.0; // Weak (noble gas) but stronger than before
+    pub const HE3_BOND_REST_LENGTH: f32 = 50.0;
+    pub const HE3_EVAPORATION_SPEED: f32 = 40.0; // Easier to evaporate
+    pub const HE3_FROZEN_EVAPORATION_SPEED: f32 = 100.0;
+    pub const HE3_FREEZE_COOLDOWN: f32 = 5.0;
+    pub const HE3_MIN_NEIGHBORS: usize = 4; // 4-fold cubic coordination
+
+    // He4 crystallization (noble gas - similar to He3, slightly stronger)
+    pub const HE4_NEIGHBOR_DISTANCE: f32 = 75.0;
+    pub const HE4_MIN_SPACING: f32 = 38.0;
+    pub const HE4_BOND_STRENGTH: f32 = 20.0; // Weak (noble gas) but stronger
+    pub const HE4_BOND_REST_LENGTH: f32 = 52.0;
+    pub const HE4_EVAPORATION_SPEED: f32 = 45.0;
+    pub const HE4_FROZEN_EVAPORATION_SPEED: f32 = 110.0;
+    pub const HE4_FREEZE_COOLDOWN: f32 = 6.0;
+    pub const HE4_MIN_NEIGHBORS: usize = 4;
+
+    // C12 crystallization (graphite/diamond - very strong bonds)
+    pub const C12_NEIGHBOR_DISTANCE: f32 = 90.0;
+    pub const C12_MIN_SPACING: f32 = 45.0;
+    pub const C12_BOND_STRENGTH: f32 = 80.0; // Very strong covalent bonds (graphite/diamond)
+    pub const C12_BOND_REST_LENGTH: f32 = 60.0;
+    pub const C12_EVAPORATION_SPEED: f32 = 100.0; // Hard to evaporate
+    pub const C12_FROZEN_EVAPORATION_SPEED: f32 = 250.0;
+    pub const C12_FREEZE_COOLDOWN: f32 = 12.0;
+    pub const C12_MIN_NEIGHBORS: usize = 3; // 3-fold for graphite, can upgrade to 4 for diamond
+
+    // Ne20 crystallization (noble gas - weak bonds, face-centered cubic)
+    pub const NE20_NEIGHBOR_DISTANCE: f32 = 85.0;
+    pub const NE20_MIN_SPACING: f32 = 42.0;
+    pub const NE20_BOND_STRENGTH: f32 = 25.0; // Weak (noble gas) but stronger
+    pub const NE20_BOND_REST_LENGTH: f32 = 55.0;
+    pub const NE20_EVAPORATION_SPEED: f32 = 50.0;
+    pub const NE20_FROZEN_EVAPORATION_SPEED: f32 = 120.0;
+    pub const NE20_FREEZE_COOLDOWN: f32 = 7.0;
+    pub const NE20_MIN_NEIGHBORS: usize = 4;
+
+    // Mg24 crystallization (metal - hexagonal close-packed)
+    pub const MG24_NEIGHBOR_DISTANCE: f32 = 100.0;
+    pub const MG24_MIN_SPACING: f32 = 50.0;
+    pub const MG24_BOND_STRENGTH: f32 = 60.0; // Strong metallic bonding
+    pub const MG24_BOND_REST_LENGTH: f32 = 65.0;
+    pub const MG24_EVAPORATION_SPEED: f32 = 80.0;
+    pub const MG24_FROZEN_EVAPORATION_SPEED: f32 = 200.0;
+    pub const MG24_FREEZE_COOLDOWN: f32 = 10.0;
+    pub const MG24_MIN_NEIGHBORS: usize = 6; // Hexagonal close-packed
+
+    // Si28 crystallization (semiconductor - diamond cubic structure)
+    pub const SI28_NEIGHBOR_DISTANCE: f32 = 95.0;
+    pub const SI28_MIN_SPACING: f32 = 48.0;
+    pub const SI28_BOND_STRENGTH: f32 = 70.0; // Strong covalent bonds (diamond cubic)
+    pub const SI28_BOND_REST_LENGTH: f32 = 62.0;
+    pub const SI28_EVAPORATION_SPEED: f32 = 90.0;
+    pub const SI28_FROZEN_EVAPORATION_SPEED: f32 = 220.0;
+    pub const SI28_FREEZE_COOLDOWN: f32 = 11.0;
+    pub const SI28_MIN_NEIGHBORS: usize = 4; // Tetrahedral diamond cubic
+
+    // S32 crystallization (non-metal - orthorhombic structure)
+    pub const S32_NEIGHBOR_DISTANCE: f32 = 88.0;
+    pub const S32_MIN_SPACING: f32 = 44.0;
+    pub const S32_BOND_STRENGTH: f32 = 45.0; // Moderate bonds (stronger than before)
+    pub const S32_BOND_REST_LENGTH: f32 = 58.0;
+    pub const S32_EVAPORATION_SPEED: f32 = 55.0;
+    pub const S32_FROZEN_EVAPORATION_SPEED: f32 = 140.0;
+    pub const S32_FREEZE_COOLDOWN: f32 = 8.0;
+    pub const S32_MIN_NEIGHBORS: usize = 4; // Variable coordination in orthorhombic
 }
 
 // ===== ATOM PHYSICS =====

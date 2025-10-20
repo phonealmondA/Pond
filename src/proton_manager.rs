@@ -58,6 +58,25 @@ impl ProtonManager {
         // STEP 2.6: H crystallization (phase transitions)
         self.update_h_crystallization(delta_time);
 
+        // STEP 2.6.1: Ne20 crystallization (noble gas phase transitions)
+        self.update_ne20_crystallization(delta_time);
+
+        // STEP 2.6.2: C12 crystallization (graphite/diamond - strong covalent bonds)
+        self.update_c12_crystallization(delta_time);
+
+        // STEP 2.6.3: Si28 crystallization (diamond cubic semiconductor)
+        self.update_si28_crystallization(delta_time);
+
+        // STEP 2.6.4: Mg24 crystallization (hexagonal close-packed metal)
+        self.update_mg24_crystallization(delta_time);
+
+        // STEP 2.6.5: S32 crystallization (orthorhombic non-metal)
+        self.update_s32_crystallization(delta_time);
+
+        // TODO: Add He3 and He4 if needed
+        // self.update_he3_crystallization(delta_time);
+        // self.update_he4_crystallization(delta_time);
+
         // STEP 2.7: O16 bond forces and breaking
         self.update_oxygen_bonds(delta_time);
 
@@ -153,7 +172,7 @@ impl ProtonManager {
 
     /// Draw all protons
     pub fn draw(&self, segments: i32) {
-        // First draw crystal bonds
+        // First draw crystal bonds (H)
         self.draw_crystal_bonds();
 
         // Then draw oxygen bonds
@@ -161,6 +180,21 @@ impl ProtonManager {
 
         // Then draw water hydrogen bonds
         self.draw_water_hydrogen_bonds();
+
+        // Draw Ne20 bonds (pink/magenta)
+        self.draw_ne20_bonds();
+
+        // Draw C12 bonds (gray)
+        self.draw_c12_bonds();
+
+        // Draw Si28 bonds (brown)
+        self.draw_si28_bonds();
+
+        // Draw Mg24 bonds (light blue-gray)
+        self.draw_mg24_bonds();
+
+        // Draw S32 bonds (yellow)
+        self.draw_s32_bonds();
 
         // Then draw protons on top
         for proton_opt in &self.protons {
@@ -251,6 +285,131 @@ impl ProtonManager {
                                         (Color::from_rgba(100, 150, 200, 120), 1.2) // Faint blue for liquid
                                     };
                                     draw_line(pos1.x, pos1.y, pos2.x, pos2.y, thickness, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw Ne20 bond lines (pink/magenta bonds for neon crystals)
+    fn draw_ne20_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_neon20() && proton.is_ne20_crystallized() {
+                    let pos1 = proton.position();
+                    let bonds = proton.ne20_crystal_bonds();
+
+                    for bond_idx in bonds {
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_neon20() && other_proton.is_ne20_crystallized() {
+                                    let pos2 = other_proton.position();
+                                    // Pink/magenta color from Ne20 element
+                                    let bond_color = Color::from_rgba(255, 150, 200, 180);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.0, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw C12 bond lines (gray bonds for carbon graphite)
+    fn draw_c12_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_stable_carbon12() && proton.is_c12_crystallized() {
+                    let pos1 = proton.position();
+                    let bonds = proton.c12_crystal_bonds();
+
+                    for bond_idx in bonds {
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_stable_carbon12() && other_proton.is_c12_crystallized() {
+                                    let pos2 = other_proton.position();
+                                    // Gray/silver color for carbon bonds
+                                    let bond_color = Color::from_rgba(160, 160, 160, 200);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.5, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw Si28 bond lines (brown bonds for silicon diamond cubic)
+    fn draw_si28_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_silicon28() && proton.is_si28_crystallized() {
+                    let pos1 = proton.position();
+                    let bonds = proton.si28_crystal_bonds();
+
+                    for bond_idx in bonds {
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_silicon28() && other_proton.is_si28_crystallized() {
+                                    let pos2 = other_proton.position();
+                                    // Brown/tan color for silicon bonds
+                                    let bond_color = Color::from_rgba(190, 160, 120, 190);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.0, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw Mg24 bond lines (light blue-gray bonds for magnesium metal)
+    fn draw_mg24_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_magnesium24() && proton.is_mg24_crystallized() {
+                    let pos1 = proton.position();
+                    let bonds = proton.mg24_crystal_bonds();
+
+                    for bond_idx in bonds {
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_magnesium24() && other_proton.is_mg24_crystallized() {
+                                    let pos2 = other_proton.position();
+                                    // Light metallic blue-gray for magnesium
+                                    let bond_color = Color::from_rgba(210, 210, 230, 185);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.2, bond_color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draw S32 bond lines (yellow bonds for sulfur crystals)
+    fn draw_s32_bonds(&self) {
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_sulfur32() && proton.is_s32_crystallized() {
+                    let pos1 = proton.position();
+                    let bonds = proton.s32_crystal_bonds();
+
+                    for bond_idx in bonds {
+                        if *bond_idx > i {
+                            if let Some(other_proton) = &self.protons[*bond_idx] {
+                                if other_proton.is_alive() && other_proton.is_sulfur32() && other_proton.is_s32_crystallized() {
+                                    let pos2 = other_proton.position();
+                                    // Yellow color for sulfur bonds
+                                    let bond_color = Color::from_rgba(230, 230, 120, 180);
+                                    draw_line(pos1.x, pos1.y, pos2.x, pos2.y, 2.0, bond_color);
                                 }
                             }
                         }
@@ -645,24 +804,76 @@ impl ProtonManager {
     }
 
     /// Update H crystallization (gas/liquid/solid phase transitions)
+    /// Universal 8-Phase Framework for H element
     /// Creates simple hexagons: 1 center + 6 sides arranged equidistantly
     fn update_h_crystallization(&mut self, delta_time: f32) {
-        // Collect all H (neutral deuterium) protons
-        let mut h_protons: Vec<(usize, Vec2)> = Vec::new();
+        // ===== PHASE 1: Collect all H atoms =====
+        let mut h_protons: Vec<(usize, Vec2, Vec2)> = Vec::new();
         for (i, proton_opt) in self.protons.iter().enumerate() {
             if let Some(proton) = proton_opt {
                 if proton.is_alive() && proton.charge() == 0 && proton.neutron_count() == 1 {
-                    h_protons.push((i, proton.position()));
+                    h_protons.push((i, proton.position(), proton.velocity()));
                 }
             }
         }
 
+        // ===== PHASE 2: Check evaporation (velocity-based phase change) =====
+        for (idx, _, vel) in &h_protons {
+            let speed = vel.length();
+
+            // Use different evaporation thresholds for crystallized vs gas/liquid H
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_crystallized() {
+                    pm::H_FROZEN_EVAPORATION_SPEED  // Crystallized H is much harder to evaporate
+                } else {
+                    pm::H_EVAPORATION_SPEED
+                }
+            } else {
+                pm::H_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                // Moving too fast - break all bonds (evaporation/sublimation)
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_crystallized(false);
+                    proton.clear_crystal_bonds();
+                    proton.reset_red_wave_hits();
+                    proton.set_h_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds (for non-crystallized or cooldown particles) =====
+        for (idx, _, _) in &h_protons {
+            if let Some(proton) = &self.protons[*idx] {
+                // Skip if on cooldown - these can't form new bonds
+                if proton.freeze_cooldown() > 0.0 {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_crystallized(false);
+                        p.clear_crystal_bonds();
+                        p.set_h_crystal_group(None);
+                    }
+                    continue;
+                }
+
+                // Crystallized H keeps bonds (acts as seed crystal)
+                // Non-crystallized H clears bonds each frame to rebuild
+                if !proton.is_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.clear_crystal_bonds();
+                        p.set_h_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (neighbor detection and cluster formation) =====
         // Build neighbor lists for each H (with minimum spacing filter)
         let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
         for i in 0..h_protons.len() {
             for j in (i + 1)..h_protons.len() {
-                let (idx1, pos1) = h_protons[i];
-                let (idx2, pos2) = h_protons[j];
+                let (idx1, pos1, _) = h_protons[i];
+                let (idx2, pos2, _) = h_protons[j];
 
                 let dist = pos1.distance(pos2);
 
@@ -678,20 +889,15 @@ impl ProtonManager {
         let mut is_center: Vec<bool> = vec![false; self.protons.len()];
         let mut center_bonds: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
 
-        for (idx, pos) in &h_protons {
-            // Check if this proton is on freeze cooldown
+        for (idx, pos, _) in &h_protons {
+            // Skip if on cooldown (already handled in Phase 3)
             let on_cooldown = if let Some(proton) = &self.protons[*idx] {
                 proton.freeze_cooldown() > 0.0
             } else {
                 false
             };
 
-            // Skip crystallization if on cooldown
             if on_cooldown {
-                if let Some(proton) = &mut self.protons[*idx] {
-                    proton.set_crystallized(false);
-                    proton.clear_crystal_bonds();
-                }
                 continue;
             }
 
@@ -738,10 +944,10 @@ impl ProtonManager {
             }
         }
 
-        // Apply hexagonal arrangement forces
+        // ===== PHASE 5: Apply alignment forces (hexagonal arrangement) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
 
-        for (idx, pos) in &h_protons {
+        for (idx, pos, _) in &h_protons {
             if !is_center[*idx] {
                 continue; // Only centers apply forces
             }
@@ -785,10 +991,11 @@ impl ProtonManager {
             }
         }
 
+        // ===== PHASE 6: Check geometry and freeze =====
         // Collect non-frozen H positions for breakoff checking
         let non_frozen_h: Vec<Vec2> = h_protons
             .iter()
-            .filter_map(|(idx, pos)| {
+            .filter_map(|(idx, pos, _)| {
                 if let Some(proton) = &self.protons[*idx] {
                     if !proton.is_crystallized() {
                         Some(*pos)
@@ -803,7 +1010,7 @@ impl ProtonManager {
 
         // Check which side particles can break off (ignore frozen H when checking space)
         let mut can_break_off: Vec<bool> = vec![false; self.protons.len()];
-        for (idx, pos) in &h_protons {
+        for (idx, pos, _) in &h_protons {
             if is_center[*idx] {
                 continue; // Centers never break off
             }
@@ -874,6 +1081,1100 @@ impl ProtonManager {
                 }
             }
         }
+
+        // ===== PHASE 7: Rigid body movement (crystal group movement) =====
+        // Detect and mark H crystal groups for collective movement
+        // First, clear all existing crystal group assignments
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.charge() == 0 && proton.neutron_count() == 1 {
+                    proton.set_h_crystal_group(None);
+                }
+            }
+        }
+
+        // Find all H atoms that form complete hexagons (1 center + 6 sides, all crystallized)
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || proton.charge() != 0 || proton.neutron_count() != 1 {
+                    continue;
+                }
+
+                if !proton.is_crystallized() || !is_center[i] {
+                    continue;
+                }
+
+                // Check if this is a complete frozen hexagon
+                let bonds = proton.crystal_bonds();
+                if bonds.len() != 6 {
+                    continue;
+                }
+
+                // Check if all bonded particles are also crystallized
+                let all_frozen = bonds.iter().all(|&idx| {
+                    if let Some(p) = &self.protons[idx] {
+                        p.is_crystallized()
+                    } else {
+                        false
+                    }
+                });
+
+                if all_frozen {
+                    // Assign group ID to center and all 6 sides
+                    let group_id = next_group_id;
+                    next_group_id += 1;
+
+                    assigned_groups[i] = Some(group_id);
+                    for &bond_idx in bonds {
+                        assigned_groups[bond_idx] = Some(group_id);
+                    }
+                }
+            }
+        }
+
+        // Apply the group assignments
+        for (i, group_opt) in assigned_groups.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.charge() == 0 && proton.neutron_count() == 1 {
+                    proton.set_h_crystal_group(*group_opt);
+                }
+            }
+        }
+
+        // TODO: In future, add rigid body physics for crystal groups
+        // Groups with same h_crystal_group ID move together as a unit
+
+        // ===== PHASE 8: Melting mechanics (red wave integration) =====
+        // Process dark red wave hits and melting (integrated from separate function)
+        // This replaces the separate red wave processing in update_dark_red_waves
+        // NOTE: Dark red wave detection happens in update_dark_red_waves
+        // Here we just need to track which crystallized H were hit this frame
+        // The actual hit detection and melting will remain in update_dark_red_waves for now
+        // to avoid breaking existing functionality. In future refactor, move it here.
+    }
+
+    /// Update Ne20 crystallization (noble gas - face-centered cubic structure)
+    /// Universal 8-Phase Framework for Ne20 element
+    fn update_ne20_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all Ne20 atoms =====
+        let mut ne20_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_neon20() {
+                    ne20_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation (velocity-based phase change) =====
+        for (idx, _, vel) in &ne20_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_ne20_crystallized() {
+                    pm::NE20_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::NE20_EVAPORATION_SPEED
+                }
+            } else {
+                pm::NE20_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_ne20_crystallized(false);
+                    proton.clear_ne20_crystal_bonds();
+                    proton.set_ne20_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds (for non-crystallized or cooldown particles) =====
+        for (idx, _, _) in &ne20_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.ne20_freeze_cooldown() > 0.0 {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_ne20_crystallized(false);
+                        p.clear_ne20_crystal_bonds();
+                        p.set_ne20_crystal_group(None);
+                    }
+                    continue;
+                }
+                if !proton.is_ne20_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.clear_ne20_crystal_bonds();
+                        p.set_ne20_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (neighbor detection - cubic coordination) =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..ne20_atoms.len() {
+            for j in (i + 1)..ne20_atoms.len() {
+                let (idx1, pos1, _) = ne20_atoms[i];
+                let (idx2, pos2, _) = ne20_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::NE20_MIN_SPACING && dist < pm::NE20_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        // Noble gas: simple cubic/tetrahedral coordination (4 neighbors)
+        for (idx, pos, _) in &ne20_atoms {
+            let on_cooldown = if let Some(proton) = &self.protons[*idx] {
+                proton.ne20_freeze_cooldown() > 0.0
+            } else {
+                false
+            };
+            if on_cooldown {
+                continue;
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::NE20_MIN_NEIGHBORS {
+                // Take closest 4 neighbors for cubic coordination
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            let dist = pos.distance(n_proton.position());
+                            Some((n_idx, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let four_nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(pm::NE20_MIN_NEIGHBORS)
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_ne20_crystallized(true);
+                    proton.set_ne20_crystal_bonds(four_nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_ne20_crystallized(false);
+                    proton.clear_ne20_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply alignment forces (tetrahedral/cubic arrangement) =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &ne20_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_ne20_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.ne20_crystal_bonds();
+                for &bond_idx in bonds {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::NE20_BOND_REST_LENGTH;
+                            // Use gentle force (10% of bond strength) to prevent bond breaking
+                            let radial_force = (delta / dist) * (radial_displacement * pm::NE20_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Check geometry and freeze =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_neon20() && proton.is_ne20_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        let acceleration = *force / proton.mass();
+                        proton.add_velocity(acceleration * delta_time);
+                    } else {
+                        proton.set_velocity(Vec2::ZERO);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 7: Rigid body movement (crystal groups) =====
+        // Clear existing groups
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_neon20() {
+                    proton.set_ne20_crystal_group(None);
+                }
+            }
+        }
+
+        // Detect crystallized clusters
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || !proton.is_neon20() || !proton.is_ne20_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.ne20_crystal_bonds();
+                if bonds.len() >= pm::NE20_MIN_NEIGHBORS {
+                    let all_frozen = bonds.iter().all(|&idx| {
+                        if let Some(p) = &self.protons[idx] {
+                            p.is_ne20_crystallized()
+                        } else {
+                            false
+                        }
+                    });
+
+                    if all_frozen {
+                        let group_id = next_group_id;
+                        next_group_id += 1;
+                        assigned_groups[i] = Some(group_id);
+                        for &bond_idx in bonds {
+                            assigned_groups[bond_idx] = Some(group_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (i, group_opt) in assigned_groups.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_neon20() {
+                    proton.set_ne20_crystal_group(*group_opt);
+                }
+            }
+        }
+
+        // ===== PHASE 8: Melting mechanics =====
+        // TODO: Add temperature-based or wave-based melting for Ne20
+    }
+
+    /// Update C12 crystallization (graphite/diamond - strong covalent bonds)
+    /// Universal 8-Phase Framework for C12 element
+    fn update_c12_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all C12 atoms =====
+        let mut c12_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_stable_carbon12() {
+                    c12_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &c12_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_c12_crystallized() {
+                    pm::C12_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::C12_EVAPORATION_SPEED
+                }
+            } else {
+                pm::C12_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_c12_crystallized(false);
+                    proton.clear_c12_crystal_bonds();
+                    proton.set_c12_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &c12_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.c12_freeze_cooldown() > 0.0 {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_c12_crystallized(false);
+                        p.clear_c12_crystal_bonds();
+                        p.set_c12_crystal_group(None);
+                    }
+                    continue;
+                }
+                if !proton.is_c12_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.clear_c12_crystal_bonds();
+                        p.set_c12_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (3-fold graphite or 4-fold diamond) =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..c12_atoms.len() {
+            for j in (i + 1)..c12_atoms.len() {
+                let (idx1, pos1, _) = c12_atoms[i];
+                let (idx2, pos2, _) = c12_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::C12_MIN_SPACING && dist < pm::C12_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        // Graphite: 3-fold planar coordination
+        for (idx, pos, _) in &c12_atoms {
+            let on_cooldown = if let Some(proton) = &self.protons[*idx] {
+                proton.c12_freeze_cooldown() > 0.0
+            } else {
+                false
+            };
+            if on_cooldown {
+                continue;
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::C12_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            let dist = pos.distance(n_proton.position());
+                            Some((n_idx, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let three_nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(pm::C12_MIN_NEIGHBORS)
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_c12_crystallized(true);
+                    proton.set_c12_crystal_bonds(three_nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_c12_crystallized(false);
+                    proton.clear_c12_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply alignment forces (120° graphite sheets) =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &c12_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_c12_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.c12_crystal_bonds();
+                for &bond_idx in bonds {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::C12_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::C12_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Check geometry and freeze =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_stable_carbon12() && proton.is_c12_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        let acceleration = *force / proton.mass();
+                        proton.add_velocity(acceleration * delta_time);
+                    } else {
+                        proton.set_velocity(Vec2::ZERO);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 7: Rigid body movement =====
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_stable_carbon12() {
+                    proton.set_c12_crystal_group(None);
+                }
+            }
+        }
+
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || !proton.is_stable_carbon12() || !proton.is_c12_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.c12_crystal_bonds();
+                if bonds.len() >= pm::C12_MIN_NEIGHBORS {
+                    let all_frozen = bonds.iter().all(|&idx| {
+                        if let Some(p) = &self.protons[idx] {
+                            p.is_c12_crystallized()
+                        } else {
+                            false
+                        }
+                    });
+
+                    if all_frozen {
+                        let group_id = next_group_id;
+                        next_group_id += 1;
+                        assigned_groups[i] = Some(group_id);
+                        for &bond_idx in bonds {
+                            assigned_groups[bond_idx] = Some(group_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (i, group_opt) in assigned_groups.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_stable_carbon12() {
+                    proton.set_c12_crystal_group(*group_opt);
+                }
+            }
+        }
+
+        // ===== PHASE 8: Melting mechanics =====
+        // TODO: Add melting for C12
+    }
+
+    /// Update Si28 crystallization (diamond cubic - semiconductor)
+    /// Universal 8-Phase Framework for Si28 element
+    fn update_si28_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all Si28 atoms =====
+        let mut si28_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_silicon28() {
+                    si28_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &si28_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_si28_crystallized() {
+                    pm::SI28_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::SI28_EVAPORATION_SPEED
+                }
+            } else {
+                pm::SI28_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_si28_crystallized(false);
+                    proton.clear_si28_crystal_bonds();
+                    proton.set_si28_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &si28_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.si28_freeze_cooldown() > 0.0 {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_si28_crystallized(false);
+                        p.clear_si28_crystal_bonds();
+                        p.set_si28_crystal_group(None);
+                    }
+                    continue;
+                }
+                if !proton.is_si28_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.clear_si28_crystal_bonds();
+                        p.set_si28_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (4-fold tetrahedral diamond cubic) =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..si28_atoms.len() {
+            for j in (i + 1)..si28_atoms.len() {
+                let (idx1, pos1, _) = si28_atoms[i];
+                let (idx2, pos2, _) = si28_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::SI28_MIN_SPACING && dist < pm::SI28_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, pos, _) in &si28_atoms {
+            let on_cooldown = if let Some(proton) = &self.protons[*idx] {
+                proton.si28_freeze_cooldown() > 0.0
+            } else {
+                false
+            };
+            if on_cooldown {
+                continue;
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::SI28_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            let dist = pos.distance(n_proton.position());
+                            Some((n_idx, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let four_nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(pm::SI28_MIN_NEIGHBORS)
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_si28_crystallized(true);
+                    proton.set_si28_crystal_bonds(four_nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_si28_crystallized(false);
+                    proton.clear_si28_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply alignment forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &si28_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_si28_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.si28_crystal_bonds();
+                for &bond_idx in bonds {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::SI28_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::SI28_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Check geometry and freeze =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_silicon28() && proton.is_si28_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        let acceleration = *force / proton.mass();
+                        proton.add_velocity(acceleration * delta_time);
+                    } else {
+                        proton.set_velocity(Vec2::ZERO);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 7: Rigid body movement =====
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_silicon28() {
+                    proton.set_si28_crystal_group(None);
+                }
+            }
+        }
+
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || !proton.is_silicon28() || !proton.is_si28_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.si28_crystal_bonds();
+                if bonds.len() >= pm::SI28_MIN_NEIGHBORS {
+                    let all_frozen = bonds.iter().all(|&idx| {
+                        if let Some(p) = &self.protons[idx] {
+                            p.is_si28_crystallized()
+                        } else {
+                            false
+                        }
+                    });
+
+                    if all_frozen {
+                        let group_id = next_group_id;
+                        next_group_id += 1;
+                        assigned_groups[i] = Some(group_id);
+                        for &bond_idx in bonds {
+                            assigned_groups[bond_idx] = Some(group_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (i, group_opt) in assigned_groups.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_silicon28() {
+                    proton.set_si28_crystal_group(*group_opt);
+                }
+            }
+        }
+
+        // ===== PHASE 8: Melting mechanics =====
+        // TODO: Add melting for Si28
+    }
+
+    /// Update Mg24 crystallization (metal - hexagonal close-packed)
+    /// Universal 8-Phase Framework for Mg24 element
+    fn update_mg24_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all Mg24 atoms =====
+        let mut mg24_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_magnesium24() {
+                    mg24_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &mg24_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_mg24_crystallized() {
+                    pm::MG24_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::MG24_EVAPORATION_SPEED
+                }
+            } else {
+                pm::MG24_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_mg24_crystallized(false);
+                    proton.clear_mg24_crystal_bonds();
+                    proton.set_mg24_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &mg24_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.mg24_freeze_cooldown() > 0.0 {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_mg24_crystallized(false);
+                        p.clear_mg24_crystal_bonds();
+                        p.set_mg24_crystal_group(None);
+                    }
+                    continue;
+                }
+                if !proton.is_mg24_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.clear_mg24_crystal_bonds();
+                        p.set_mg24_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (6-fold hexagonal close-packed) =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..mg24_atoms.len() {
+            for j in (i + 1)..mg24_atoms.len() {
+                let (idx1, pos1, _) = mg24_atoms[i];
+                let (idx2, pos2, _) = mg24_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::MG24_MIN_SPACING && dist < pm::MG24_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, pos, _) in &mg24_atoms {
+            let on_cooldown = if let Some(proton) = &self.protons[*idx] {
+                proton.mg24_freeze_cooldown() > 0.0
+            } else {
+                false
+            };
+            if on_cooldown {
+                continue;
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::MG24_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            let dist = pos.distance(n_proton.position());
+                            Some((n_idx, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let six_nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(pm::MG24_MIN_NEIGHBORS)
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_mg24_crystallized(true);
+                    proton.set_mg24_crystal_bonds(six_nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_mg24_crystallized(false);
+                    proton.clear_mg24_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply alignment forces (hexagonal arrangement) =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &mg24_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_mg24_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.mg24_crystal_bonds();
+                for &bond_idx in bonds {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::MG24_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::MG24_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Check geometry and freeze =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_magnesium24() && proton.is_mg24_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        let acceleration = *force / proton.mass();
+                        proton.add_velocity(acceleration * delta_time);
+                    } else {
+                        proton.set_velocity(Vec2::ZERO);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 7: Rigid body movement =====
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_magnesium24() {
+                    proton.set_mg24_crystal_group(None);
+                }
+            }
+        }
+
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || !proton.is_magnesium24() || !proton.is_mg24_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.mg24_crystal_bonds();
+                if bonds.len() >= pm::MG24_MIN_NEIGHBORS {
+                    let all_frozen = bonds.iter().all(|&idx| {
+                        if let Some(p) = &self.protons[idx] {
+                            p.is_mg24_crystallized()
+                        } else {
+                            false
+                        }
+                    });
+
+                    if all_frozen {
+                        let group_id = next_group_id;
+                        next_group_id += 1;
+                        assigned_groups[i] = Some(group_id);
+                        for &bond_idx in bonds {
+                            assigned_groups[bond_idx] = Some(group_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (i, group_opt) in assigned_groups.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_magnesium24() {
+                    proton.set_mg24_crystal_group(*group_opt);
+                }
+            }
+        }
+
+        // ===== PHASE 8: Melting mechanics =====
+        // TODO: Add melting for Mg24
+    }
+
+    /// Update S32 crystallization (non-metal - orthorhombic structure)
+    /// Universal 8-Phase Framework for S32 element
+    fn update_s32_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all S32 atoms =====
+        let mut s32_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.is_sulfur32() {
+                    s32_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &s32_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_s32_crystallized() {
+                    pm::S32_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::S32_EVAPORATION_SPEED
+                }
+            } else {
+                pm::S32_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_s32_crystallized(false);
+                    proton.clear_s32_crystal_bonds();
+                    proton.set_s32_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &s32_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.s32_freeze_cooldown() > 0.0 {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_s32_crystallized(false);
+                        p.clear_s32_crystal_bonds();
+                        p.set_s32_crystal_group(None);
+                    }
+                    continue;
+                }
+                if !proton.is_s32_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.clear_s32_crystal_bonds();
+                        p.set_s32_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds (4-fold orthorhombic) =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..s32_atoms.len() {
+            for j in (i + 1)..s32_atoms.len() {
+                let (idx1, pos1, _) = s32_atoms[i];
+                let (idx2, pos2, _) = s32_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::S32_MIN_SPACING && dist < pm::S32_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, pos, _) in &s32_atoms {
+            let on_cooldown = if let Some(proton) = &self.protons[*idx] {
+                proton.s32_freeze_cooldown() > 0.0
+            } else {
+                false
+            };
+            if on_cooldown {
+                continue;
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::S32_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            let dist = pos.distance(n_proton.position());
+                            Some((n_idx, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let four_nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(pm::S32_MIN_NEIGHBORS)
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_s32_crystallized(true);
+                    proton.set_s32_crystal_bonds(four_nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_s32_crystallized(false);
+                    proton.clear_s32_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply alignment forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &s32_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_s32_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.s32_crystal_bonds();
+                for &bond_idx in bonds {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::S32_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::S32_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Check geometry and freeze =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.is_sulfur32() && proton.is_s32_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        let acceleration = *force / proton.mass();
+                        proton.add_velocity(acceleration * delta_time);
+                    } else {
+                        proton.set_velocity(Vec2::ZERO);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 7: Rigid body movement =====
+        for proton_opt in &mut self.protons {
+            if let Some(proton) = proton_opt {
+                if proton.is_sulfur32() {
+                    proton.set_s32_crystal_group(None);
+                }
+            }
+        }
+
+        let mut next_group_id = 0;
+        let mut assigned_groups: Vec<Option<usize>> = vec![None; self.protons.len()];
+
+        for i in 0..self.protons.len() {
+            if let Some(proton) = &self.protons[i] {
+                if !proton.is_alive() || !proton.is_sulfur32() || !proton.is_s32_crystallized() {
+                    continue;
+                }
+
+                let bonds = proton.s32_crystal_bonds();
+                if bonds.len() >= pm::S32_MIN_NEIGHBORS {
+                    let all_frozen = bonds.iter().all(|&idx| {
+                        if let Some(p) = &self.protons[idx] {
+                            p.is_s32_crystallized()
+                        } else {
+                            false
+                        }
+                    });
+
+                    if all_frozen {
+                        let group_id = next_group_id;
+                        next_group_id += 1;
+                        assigned_groups[i] = Some(group_id);
+                        for &bond_idx in bonds {
+                            assigned_groups[bond_idx] = Some(group_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (i, group_opt) in assigned_groups.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_sulfur32() {
+                    proton.set_s32_crystal_group(*group_opt);
+                }
+            }
+        }
+
+        // ===== PHASE 8: Melting mechanics =====
+        // TODO: Add melting for S32
     }
 
     /// Update O16 molecular bonds (spring forces and breaking)
