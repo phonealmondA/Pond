@@ -1280,15 +1280,72 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.ne20_crystal_bonds();
-                for &bond_idx in bonds {
-                    if let Some(bonded) = &self.protons[bond_idx] {
-                        let delta = bonded.position() - *pos;
-                        let dist = delta.length();
-                        if dist > 0.1 {
-                            let radial_displacement = dist - pm::NE20_BOND_REST_LENGTH;
-                            // Use gentle force (10% of bond strength) to prevent bond breaking
-                            let radial_force = (delta / dist) * (radial_displacement * pm::NE20_BOND_STRENGTH * 0.1);
-                            forces[bond_idx] += radial_force;
+                let bond_count = bonds.len();
+
+                // Apply angular alignment for 4 bonds (90° spacing - square/tetrahedral)
+                if bond_count == 4 {
+                    // Get current positions and angles of bonded neighbors
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_neon20() {
+                                let partner_pos = partner.position();
+                                let delta = partner_pos - *pos;
+                                let dist = delta.length();
+                                let angle = delta.y.atan2(delta.x);
+                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                            }
+                        }
+                    }
+
+                    if neighbor_data.len() == 4 {
+                        // Sort by angle
+                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+
+                        // Calculate ideal positions for 90° spacing (square)
+                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                        for i in 0..neighbor_data.len() {
+                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+
+                            // Calculate ideal angle for this neighbor (90° = PI/2 spacing)
+                            let ideal_angle = start_angle + (i as f32 * pm::NE20_ANGLE_SPACING);
+
+                            // Calculate ideal position at target distance and ideal angle
+                            let ideal_pos = Vec2::new(
+                                pos.x + ideal_angle.cos() * pm::NE20_BOND_REST_LENGTH,
+                                pos.y + ideal_angle.sin() * pm::NE20_BOND_REST_LENGTH,
+                            );
+
+                            // Calculate force to move neighbor toward ideal position
+                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
+                                p.position()
+                            } else {
+                                continue;
+                            };
+
+                            let displacement = ideal_pos - current_pos;
+                            let force = displacement * pm::NE20_ALIGNMENT_STRENGTH;
+
+                            // Apply force to neighbor (only if not frozen)
+                            if let Some(neighbor) = &self.protons[neighbor_idx] {
+                                if !neighbor.is_ne20_crystallized() {
+                                    forces[neighbor_idx] += force;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // For other bond counts, apply simple radial forces
+                    for &bond_idx in bonds {
+                        if let Some(bonded) = &self.protons[bond_idx] {
+                            let delta = bonded.position() - *pos;
+                            let dist = delta.length();
+                            if dist > 0.1 {
+                                let radial_displacement = dist - pm::NE20_BOND_REST_LENGTH;
+                                // Use gentle force (10% of bond strength) to prevent bond breaking
+                                let radial_force = (delta / dist) * (radial_displacement * pm::NE20_BOND_STRENGTH * 0.1);
+                                forces[bond_idx] += radial_force;
+                            }
                         }
                     }
                 }
@@ -1487,14 +1544,71 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.c12_crystal_bonds();
-                for &bond_idx in bonds {
-                    if let Some(bonded) = &self.protons[bond_idx] {
-                        let delta = bonded.position() - *pos;
-                        let dist = delta.length();
-                        if dist > 0.1 {
-                            let radial_displacement = dist - pm::C12_BOND_REST_LENGTH;
-                            let radial_force = (delta / dist) * (radial_displacement * pm::C12_BOND_STRENGTH * 0.1);
-                            forces[bond_idx] += radial_force;
+                let bond_count = bonds.len();
+
+                // Apply angular alignment for 3 bonds (120° spacing - triangle/graphite)
+                if bond_count == 3 {
+                    // Get current positions and angles of bonded neighbors
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_stable_carbon12() {
+                                let partner_pos = partner.position();
+                                let delta = partner_pos - *pos;
+                                let dist = delta.length();
+                                let angle = delta.y.atan2(delta.x);
+                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                            }
+                        }
+                    }
+
+                    if neighbor_data.len() == 3 {
+                        // Sort by angle
+                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+
+                        // Calculate ideal positions for 120° spacing (triangle/graphite)
+                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                        for i in 0..neighbor_data.len() {
+                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+
+                            // Calculate ideal angle for this neighbor (120° = 2*PI/3 spacing)
+                            let ideal_angle = start_angle + (i as f32 * pm::C12_ANGLE_SPACING);
+
+                            // Calculate ideal position at target distance and ideal angle
+                            let ideal_pos = Vec2::new(
+                                pos.x + ideal_angle.cos() * pm::C12_BOND_REST_LENGTH,
+                                pos.y + ideal_angle.sin() * pm::C12_BOND_REST_LENGTH,
+                            );
+
+                            // Calculate force to move neighbor toward ideal position
+                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
+                                p.position()
+                            } else {
+                                continue;
+                            };
+
+                            let displacement = ideal_pos - current_pos;
+                            let force = displacement * pm::C12_ALIGNMENT_STRENGTH;
+
+                            // Apply force to neighbor (only if not frozen)
+                            if let Some(neighbor) = &self.protons[neighbor_idx] {
+                                if !neighbor.is_c12_crystallized() {
+                                    forces[neighbor_idx] += force;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // For other bond counts, apply simple radial forces
+                    for &bond_idx in bonds {
+                        if let Some(bonded) = &self.protons[bond_idx] {
+                            let delta = bonded.position() - *pos;
+                            let dist = delta.length();
+                            if dist > 0.1 {
+                                let radial_displacement = dist - pm::C12_BOND_REST_LENGTH;
+                                let radial_force = (delta / dist) * (radial_displacement * pm::C12_BOND_STRENGTH * 0.1);
+                                forces[bond_idx] += radial_force;
+                            }
                         }
                     }
                 }
@@ -1681,7 +1795,7 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 5: Apply alignment forces =====
+        // ===== PHASE 5: Apply alignment forces (diamond cubic - 90° tetrahedral) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
         for (idx, pos, _) in &si28_atoms {
             if let Some(proton) = &self.protons[*idx] {
@@ -1690,14 +1804,71 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.si28_crystal_bonds();
-                for &bond_idx in bonds {
-                    if let Some(bonded) = &self.protons[bond_idx] {
-                        let delta = bonded.position() - *pos;
-                        let dist = delta.length();
-                        if dist > 0.1 {
-                            let radial_displacement = dist - pm::SI28_BOND_REST_LENGTH;
-                            let radial_force = (delta / dist) * (radial_displacement * pm::SI28_BOND_STRENGTH * 0.1);
-                            forces[bond_idx] += radial_force;
+                let bond_count = bonds.len();
+
+                // Apply angular alignment for 4 bonds (90° spacing - diamond cubic)
+                if bond_count == 4 {
+                    // Get current positions and angles of bonded neighbors
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_silicon28() {
+                                let partner_pos = partner.position();
+                                let delta = partner_pos - *pos;
+                                let dist = delta.length();
+                                let angle = delta.y.atan2(delta.x);
+                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                            }
+                        }
+                    }
+
+                    if neighbor_data.len() == 4 {
+                        // Sort by angle
+                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+
+                        // Calculate ideal positions for 90° spacing (square/diamond)
+                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                        for i in 0..neighbor_data.len() {
+                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+
+                            // Calculate ideal angle for this neighbor (90° = PI/2 spacing)
+                            let ideal_angle = start_angle + (i as f32 * pm::SI28_ANGLE_SPACING);
+
+                            // Calculate ideal position at target distance and ideal angle
+                            let ideal_pos = Vec2::new(
+                                pos.x + ideal_angle.cos() * pm::SI28_BOND_REST_LENGTH,
+                                pos.y + ideal_angle.sin() * pm::SI28_BOND_REST_LENGTH,
+                            );
+
+                            // Calculate force to move neighbor toward ideal position
+                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
+                                p.position()
+                            } else {
+                                continue;
+                            };
+
+                            let displacement = ideal_pos - current_pos;
+                            let force = displacement * pm::SI28_ALIGNMENT_STRENGTH;
+
+                            // Apply force to neighbor (only if not frozen)
+                            if let Some(neighbor) = &self.protons[neighbor_idx] {
+                                if !neighbor.is_si28_crystallized() {
+                                    forces[neighbor_idx] += force;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // For other bond counts, apply simple radial forces
+                    for &bond_idx in bonds {
+                        if let Some(bonded) = &self.protons[bond_idx] {
+                            let delta = bonded.position() - *pos;
+                            let dist = delta.length();
+                            if dist > 0.1 {
+                                let radial_displacement = dist - pm::SI28_BOND_REST_LENGTH;
+                                let radial_force = (delta / dist) * (radial_displacement * pm::SI28_BOND_STRENGTH * 0.1);
+                                forces[bond_idx] += radial_force;
+                            }
                         }
                     }
                 }
@@ -1884,7 +2055,7 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 5: Apply alignment forces (hexagonal arrangement) =====
+        // ===== PHASE 5: Apply alignment forces (hexagonal arrangement - 60° spacing) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
         for (idx, pos, _) in &mg24_atoms {
             if let Some(proton) = &self.protons[*idx] {
@@ -1893,14 +2064,71 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.mg24_crystal_bonds();
-                for &bond_idx in bonds {
-                    if let Some(bonded) = &self.protons[bond_idx] {
-                        let delta = bonded.position() - *pos;
-                        let dist = delta.length();
-                        if dist > 0.1 {
-                            let radial_displacement = dist - pm::MG24_BOND_REST_LENGTH;
-                            let radial_force = (delta / dist) * (radial_displacement * pm::MG24_BOND_STRENGTH * 0.1);
-                            forces[bond_idx] += radial_force;
+                let bond_count = bonds.len();
+
+                // Apply angular alignment for 6 bonds (60° spacing - hexagon)
+                if bond_count == 6 {
+                    // Get current positions and angles of bonded neighbors
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_magnesium24() {
+                                let partner_pos = partner.position();
+                                let delta = partner_pos - *pos;
+                                let dist = delta.length();
+                                let angle = delta.y.atan2(delta.x);
+                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                            }
+                        }
+                    }
+
+                    if neighbor_data.len() == 6 {
+                        // Sort by angle
+                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+
+                        // Calculate ideal positions for 60° spacing (hexagon)
+                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                        for i in 0..neighbor_data.len() {
+                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+
+                            // Calculate ideal angle for this neighbor (60° = PI/3 spacing)
+                            let ideal_angle = start_angle + (i as f32 * pm::MG24_ANGLE_SPACING);
+
+                            // Calculate ideal position at target distance and ideal angle
+                            let ideal_pos = Vec2::new(
+                                pos.x + ideal_angle.cos() * pm::MG24_BOND_REST_LENGTH,
+                                pos.y + ideal_angle.sin() * pm::MG24_BOND_REST_LENGTH,
+                            );
+
+                            // Calculate force to move neighbor toward ideal position
+                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
+                                p.position()
+                            } else {
+                                continue;
+                            };
+
+                            let displacement = ideal_pos - current_pos;
+                            let force = displacement * pm::MG24_ALIGNMENT_STRENGTH;
+
+                            // Apply force to neighbor (only if not frozen)
+                            if let Some(neighbor) = &self.protons[neighbor_idx] {
+                                if !neighbor.is_mg24_crystallized() {
+                                    forces[neighbor_idx] += force;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // For other bond counts, apply simple radial forces
+                    for &bond_idx in bonds {
+                        if let Some(bonded) = &self.protons[bond_idx] {
+                            let delta = bonded.position() - *pos;
+                            let dist = delta.length();
+                            if dist > 0.1 {
+                                let radial_displacement = dist - pm::MG24_BOND_REST_LENGTH;
+                                let radial_force = (delta / dist) * (radial_displacement * pm::MG24_BOND_STRENGTH * 0.1);
+                                forces[bond_idx] += radial_force;
+                            }
                         }
                     }
                 }
@@ -2087,7 +2315,7 @@ impl ProtonManager {
             }
         }
 
-        // ===== PHASE 5: Apply alignment forces =====
+        // ===== PHASE 5: Apply alignment forces (orthorhombic - 90° spacing) =====
         let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
         for (idx, pos, _) in &s32_atoms {
             if let Some(proton) = &self.protons[*idx] {
@@ -2096,14 +2324,71 @@ impl ProtonManager {
                 }
 
                 let bonds = proton.s32_crystal_bonds();
-                for &bond_idx in bonds {
-                    if let Some(bonded) = &self.protons[bond_idx] {
-                        let delta = bonded.position() - *pos;
-                        let dist = delta.length();
-                        if dist > 0.1 {
-                            let radial_displacement = dist - pm::S32_BOND_REST_LENGTH;
-                            let radial_force = (delta / dist) * (radial_displacement * pm::S32_BOND_STRENGTH * 0.1);
-                            forces[bond_idx] += radial_force;
+                let bond_count = bonds.len();
+
+                // Apply angular alignment for 4 bonds (90° spacing - orthorhombic)
+                if bond_count == 4 {
+                    // Get current positions and angles of bonded neighbors
+                    let mut neighbor_data: Vec<(usize, Vec2, f32, f32)> = Vec::new(); // (index, position, distance, angle)
+                    for bond_idx in bonds {
+                        if let Some(partner) = &self.protons[*bond_idx] {
+                            if partner.is_alive() && partner.is_sulfur32() {
+                                let partner_pos = partner.position();
+                                let delta = partner_pos - *pos;
+                                let dist = delta.length();
+                                let angle = delta.y.atan2(delta.x);
+                                neighbor_data.push((*bond_idx, partner_pos, dist, angle));
+                            }
+                        }
+                    }
+
+                    if neighbor_data.len() == 4 {
+                        // Sort by angle
+                        neighbor_data.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+
+                        // Calculate ideal positions for 90° spacing (orthorhombic)
+                        let start_angle = neighbor_data[0].3; // Use first neighbor as reference
+                        for i in 0..neighbor_data.len() {
+                            let (neighbor_idx, _current_pos, _current_dist, _current_angle) = neighbor_data[i];
+
+                            // Calculate ideal angle for this neighbor (90° = PI/2 spacing)
+                            let ideal_angle = start_angle + (i as f32 * pm::S32_ANGLE_SPACING);
+
+                            // Calculate ideal position at target distance and ideal angle
+                            let ideal_pos = Vec2::new(
+                                pos.x + ideal_angle.cos() * pm::S32_BOND_REST_LENGTH,
+                                pos.y + ideal_angle.sin() * pm::S32_BOND_REST_LENGTH,
+                            );
+
+                            // Calculate force to move neighbor toward ideal position
+                            let current_pos = if let Some(p) = &self.protons[neighbor_idx] {
+                                p.position()
+                            } else {
+                                continue;
+                            };
+
+                            let displacement = ideal_pos - current_pos;
+                            let force = displacement * pm::S32_ALIGNMENT_STRENGTH;
+
+                            // Apply force to neighbor (only if not frozen)
+                            if let Some(neighbor) = &self.protons[neighbor_idx] {
+                                if !neighbor.is_s32_crystallized() {
+                                    forces[neighbor_idx] += force;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // For other bond counts, apply simple radial forces
+                    for &bond_idx in bonds {
+                        if let Some(bonded) = &self.protons[bond_idx] {
+                            let delta = bonded.position() - *pos;
+                            let dist = delta.length();
+                            if dist > 0.1 {
+                                let radial_displacement = dist - pm::S32_BOND_REST_LENGTH;
+                                let radial_force = (delta / dist) * (radial_displacement * pm::S32_BOND_STRENGTH * 0.1);
+                                forces[bond_idx] += radial_force;
+                            }
                         }
                     }
                 }

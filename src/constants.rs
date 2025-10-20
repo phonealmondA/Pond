@@ -225,6 +225,10 @@ pub mod proton_manager {
     pub const HE4_FROZEN_EVAPORATION_SPEED: f32 = 110.0;
     pub const HE4_FREEZE_COOLDOWN: f32 = 6.0;
     pub const HE4_MIN_NEIGHBORS: usize = 4;
+    // He4 angular geometry (tetrahedral -> 4-fold at 90° in 2D)
+    pub const HE4_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
+    pub const HE4_ANGLE_TOLERANCE: f32 = 0.5; // ~28 degrees
+    pub const HE4_ALIGNMENT_STRENGTH: f32 = 3.0;
 
     // C12 crystallization (graphite/diamond - very strong bonds)
     pub const C12_NEIGHBOR_DISTANCE: f32 = 90.0;
@@ -235,6 +239,10 @@ pub mod proton_manager {
     pub const C12_FROZEN_EVAPORATION_SPEED: f32 = 250.0;
     pub const C12_FREEZE_COOLDOWN: f32 = 12.0;
     pub const C12_MIN_NEIGHBORS: usize = 3; // 3-fold for graphite, can upgrade to 4 for diamond
+    // C12 angular geometry (graphite = 3 neighbors at 120°)
+    pub const C12_ANGLE_SPACING: f32 = 2.0944; // 120 degrees in radians (2*PI/3)
+    pub const C12_ANGLE_TOLERANCE: f32 = 0.35; // ~20 degrees
+    pub const C12_ALIGNMENT_STRENGTH: f32 = 6.0;
 
     // Ne20 crystallization (noble gas - weak bonds, face-centered cubic)
     pub const NE20_NEIGHBOR_DISTANCE: f32 = 85.0;
@@ -245,6 +253,10 @@ pub mod proton_manager {
     pub const NE20_FROZEN_EVAPORATION_SPEED: f32 = 120.0;
     pub const NE20_FREEZE_COOLDOWN: f32 = 7.0;
     pub const NE20_MIN_NEIGHBORS: usize = 4;
+    // Ne20 angular geometry (face-centered cubic = 4 neighbors at 90°)
+    pub const NE20_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
+    pub const NE20_ANGLE_TOLERANCE: f32 = 0.5; // ~28 degrees
+    pub const NE20_ALIGNMENT_STRENGTH: f32 = 3.0;
 
     // Mg24 crystallization (metal - hexagonal close-packed)
     pub const MG24_NEIGHBOR_DISTANCE: f32 = 100.0;
@@ -255,6 +267,10 @@ pub mod proton_manager {
     pub const MG24_FROZEN_EVAPORATION_SPEED: f32 = 200.0;
     pub const MG24_FREEZE_COOLDOWN: f32 = 10.0;
     pub const MG24_MIN_NEIGHBORS: usize = 6; // Hexagonal close-packed
+    // Mg24 angular geometry (hexagonal = 6 neighbors at 60°)
+    pub const MG24_ANGLE_SPACING: f32 = 1.0472; // 60 degrees in radians (PI/3)
+    pub const MG24_ANGLE_TOLERANCE: f32 = 0.35; // ~20 degrees
+    pub const MG24_ALIGNMENT_STRENGTH: f32 = 8.0;
 
     // Si28 crystallization (semiconductor - diamond cubic structure)
     pub const SI28_NEIGHBOR_DISTANCE: f32 = 95.0;
@@ -265,6 +281,10 @@ pub mod proton_manager {
     pub const SI28_FROZEN_EVAPORATION_SPEED: f32 = 220.0;
     pub const SI28_FREEZE_COOLDOWN: f32 = 11.0;
     pub const SI28_MIN_NEIGHBORS: usize = 4; // Tetrahedral diamond cubic
+    // Si28 angular geometry (diamond cubic = 4 neighbors at 90°)
+    pub const SI28_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
+    pub const SI28_ANGLE_TOLERANCE: f32 = 0.5; // ~28 degrees
+    pub const SI28_ALIGNMENT_STRENGTH: f32 = 5.0;
 
     // S32 crystallization (non-metal - orthorhombic structure)
     pub const S32_NEIGHBOR_DISTANCE: f32 = 88.0;
@@ -275,6 +295,10 @@ pub mod proton_manager {
     pub const S32_FROZEN_EVAPORATION_SPEED: f32 = 140.0;
     pub const S32_FREEZE_COOLDOWN: f32 = 8.0;
     pub const S32_MIN_NEIGHBORS: usize = 4; // Variable coordination in orthorhombic
+    // S32 angular geometry (orthorhombic = mix of 90° and 120°, use 90° for 4 neighbors)
+    pub const S32_ANGLE_SPACING: f32 = 1.5708; // 90 degrees in radians (PI/2)
+    pub const S32_ANGLE_TOLERANCE: f32 = 0.6; // ~34 degrees - more relaxed for irregular structure
+    pub const S32_ALIGNMENT_STRENGTH: f32 = 4.0;
 }
 
 // ===== ATOM PHYSICS =====
