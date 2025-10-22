@@ -7,6 +7,10 @@ mod ring;
 mod atom;
 mod proton_manager;
 
+// Cell-related modules (not yet integrated into the game)
+mod cell_constants;
+mod cell;
+
 use macroquad::prelude::*;
 use ring::RingManager;
 use atom::AtomManager;

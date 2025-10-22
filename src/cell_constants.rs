@@ -1,3 +1,6 @@
+// Cell membrane simulation constants
+// Not yet integrated into the main game
+
 use macroquad::prelude::*;
 
 // =============================================================================
@@ -22,13 +25,6 @@ pub const CENTER_MARKER_RADIUS: f32 = 3.0;  // Radius of center point markers
 pub const LIPID_HEAD_OUTLINE_WIDTH: f32 = 0.1;  // Line width for lipid head circle outline
 pub const EXPANSION_ZONE_BORDER_WIDTH: f32 = 1.5;  // Line width for expansion zone border
 pub const HEAD_ZONE_BORDER_WIDTH: f32 = 1.0;  // Line width for head zone border
-
-// =============================================================================
-// SCREEN SETTINGS
-// =============================================================================
-
-pub const SCREEN_WIDTH: f32 = 1200.0;
-pub const SCREEN_HEIGHT: f32 = 800.0;
 
 // =============================================================================
 // MEMBRANE STRUCTURE

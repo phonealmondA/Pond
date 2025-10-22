@@ -1,22 +1,23 @@
-use macroquad::prelude::*;
+// Cell membrane simulation - Cell and MembraneComponent structures
+// Not yet integrated into the main game
 
-mod constants;
-use constants::*;
+use macroquad::prelude::*;
+use crate::cell_constants::*;
 
 // Membrane component - represents one lipid molecule in the cell membrane
-struct MembraneComponent {
-    position: Vec2,      // Current position of the component
-    velocity: Vec2,      // Velocity for physics
-    angle: f32,          // Angle the component is facing (orientation)
-    circle_angle: f32,   // Fixed angle around the cell circle (0 to 2π)
-    ideal_radius: f32,   // Ideal distance from center (100 for inner, 125 for outer)
-    circle_radius: f32,  // Radius of the lipid head (circle)
-    bar_length: f32,     // Length of the lipid tail (bar)
-    bar_width: f32,      // Width of the lipid tail (bar)
+pub struct MembraneComponent {
+    pub position: Vec2,      // Current position of the component
+    pub velocity: Vec2,      // Velocity for physics
+    pub angle: f32,          // Angle the component is facing (orientation)
+    pub circle_angle: f32,   // Fixed angle around the cell circle (0 to 2π)
+    pub ideal_radius: f32,   // Ideal distance from center (100 for inner, 125 for outer)
+    pub circle_radius: f32,  // Radius of the lipid head (circle)
+    pub bar_length: f32,     // Length of the lipid tail (bar)
+    pub bar_width: f32,      // Width of the lipid tail (bar)
 }
 
 impl MembraneComponent {
-    fn new(position: Vec2, angle: f32, circle_angle: f32, ideal_radius: f32) -> Self {
+    pub fn new(position: Vec2, angle: f32, circle_angle: f32, ideal_radius: f32) -> Self {
         MembraneComponent {
             position,
             velocity: Vec2::ZERO,
@@ -29,7 +30,7 @@ impl MembraneComponent {
         }
     }
 
-    fn update(&mut self, dt: f32) {
+    pub fn update(&mut self, dt: f32) {
         // Apply velocity
         self.position += self.velocity * dt;
 
@@ -37,7 +38,7 @@ impl MembraneComponent {
         self.velocity *= DAMPING;
     }
 
-    fn draw(&self) {
+    pub fn draw(&self) {
         let direction = Vec2::new(self.angle.cos(), self.angle.sin());
 
         // Draw lipid tail (bar) pointing opposite to the direction angle - hydrophobic
@@ -51,36 +52,34 @@ impl MembraneComponent {
         draw_circle_lines(circle_pos.x, circle_pos.y, self.circle_radius, LIPID_HEAD_OUTLINE_WIDTH, WHITE);
     }
 
-    fn get_tail_position(&self) -> Vec2 {
+    pub fn get_tail_position(&self) -> Vec2 {
         let direction = Vec2::new(self.angle.cos(), self.angle.sin());
         self.position - direction * self.bar_length
     }
 
-    fn get_head_position(&self) -> Vec2 {
+    pub fn get_head_position(&self) -> Vec2 {
         let direction = Vec2::new(self.angle.cos(), self.angle.sin());
         self.position + direction * self.circle_radius
     }
 }
 
 // Cell with membrane
-struct Cell {
-    actual_center: Vec2,      // The actual center position (center of mass)
-    center_velocity: Vec2,    // Velocity of the center
-    head_position: Vec2,      // The head position (leads ahead during movement for pseudopod formation)
-    head_velocity: Vec2,      // Velocity of the head
-    input_direction: Vec2,    // Current input direction (WASD)
-    stationary_time: f32,     // Time the head has been stationary (for delayed reforming)
-    expansion_radius: f32,    // Invisible expanding force radius (0 = inactive)
-    expansion_center: Vec2,   // Fixed position of the expansion zone (stays stationary when movement starts)
-    expansion_active_time: f32, // Time the expansion has been active during movement
-    inner_membrane: Vec<MembraneComponent>,
-    outer_membrane: Vec<MembraneComponent>,
+pub struct Cell {
+    pub actual_center: Vec2,      // The actual center position (center of mass)
+    pub center_velocity: Vec2,    // Velocity of the center
+    pub head_position: Vec2,      // The head position (leads ahead during movement for pseudopod formation)
+    pub head_velocity: Vec2,      // Velocity of the head
+    pub input_direction: Vec2,    // Current input direction (WASD)
+    pub stationary_time: f32,     // Time the head has been stationary (for delayed reforming)
+    pub expansion_radius: f32,    // Invisible expanding force radius (0 = inactive)
+    pub expansion_center: Vec2,   // Fixed position of the expansion zone (stays stationary when movement starts)
+    pub expansion_active_time: f32, // Time the expansion has been active during movement
+    pub inner_membrane: Vec<MembraneComponent>,
+    pub outer_membrane: Vec<MembraneComponent>,
 }
 
 impl Cell {
-    fn new(center: Vec2, num_components: usize) -> Self {
-        const TWO_PI: f32 = 2.0 * std::f32::consts::PI;
-
+    pub fn new(center: Vec2, num_components: usize) -> Self {
         let inner_membrane = Self::create_membrane_ring(center, num_components, INNER_MEMBRANE_RADIUS, true);
         let outer_membrane = Self::create_membrane_ring(center, num_components, OUTER_MEMBRANE_RADIUS, false);
 
@@ -183,7 +182,7 @@ impl Cell {
         }
     }
 
-    fn update(&mut self, dt: f32) {
+    pub fn update(&mut self, dt: f32) {
         self.update_head_physics(dt);
         self.update_center_physics(dt);
         self.update_expansion_state(dt);
@@ -382,7 +381,7 @@ impl Cell {
         }
     }
 
-    fn handle_movement(&mut self) {
+    pub fn handle_movement(&mut self) {
         // WASD input
         let mut input = Vec2::ZERO;
 
@@ -403,7 +402,7 @@ impl Cell {
         self.input_direction = input;
     }
 
-    fn draw(&self) {
+    pub fn draw(&self) {
         // Draw expansion zone if active (blue circle stays stationary)
         if self.expansion_radius > 0.0 {
             draw_circle(self.expansion_center.x, self.expansion_center.y, self.expansion_radius, EXPANSION_ZONE_COLOR);
@@ -425,33 +424,5 @@ impl Cell {
         // Draw center markers for reference
         draw_circle(self.actual_center.x, self.actual_center.y, CENTER_MARKER_RADIUS, GREEN);
         draw_circle(self.head_position.x, self.head_position.y, CENTER_MARKER_RADIUS, RED);
-    }
-}
-
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "Cell Membrane Simulation".to_string(),
-        window_width: SCREEN_WIDTH as i32,
-        window_height: SCREEN_HEIGHT as i32,
-        window_resizable: false,
-        ..Default::default()
-    }
-}
-
-#[macroquad::main(window_conf)]
-async fn main() {
-    let center = Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0);
-    let mut cell = Cell::new(center, NUM_MEMBRANE_COMPONENTS);
-
-    loop {
-        let dt = get_frame_time();
-
-        cell.handle_movement();
-        cell.update(dt);
-
-        clear_background(BLACK);
-        cell.draw();
-
-        next_frame().await
     }
 }
