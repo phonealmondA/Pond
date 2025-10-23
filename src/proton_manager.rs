@@ -79,6 +79,21 @@ impl ProtonManager {
         // STEP 2.6.7: He4 crystallization (ultra-weak noble gas)
         self.update_he4_crystallization(delta_time);
 
+        // STEP 2.6.8: N14 crystallization (nitrogen - diatomic molecule)
+        self.update_n14_crystallization(delta_time);
+
+        // STEP 2.6.9: P31 crystallization (phosphorus - tetrahedral P4)
+        self.update_p31_crystallization(delta_time);
+
+        // STEP 2.6.10: Na23 crystallization (sodium - soft alkali metal)
+        self.update_na23_crystallization(delta_time);
+
+        // STEP 2.6.11: K39 crystallization (potassium - very soft alkali metal)
+        self.update_k39_crystallization(delta_time);
+
+        // STEP 2.6.12: Ca40 crystallization (calcium - alkaline earth metal)
+        self.update_ca40_crystallization(delta_time);
+
         // STEP 2.7: O16 bond forces and breaking
         self.update_oxygen_bonds(delta_time);
 
@@ -5280,6 +5295,698 @@ impl ProtonManager {
 
                 self.protons[i] = Some(proton);
                 break;
+            }
+        }
+    }
+
+    // === BIOLOGICAL ELEMENTS CRYSTALLIZATION METHODS ===
+
+    /// N14 crystallization - nitrogen forms N₂ diatomic molecules and weak van der Waals crystals
+    fn update_n14_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all N14 atoms =====
+        let mut n14_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 7 && proton.neutron_count() == 7 {
+                    n14_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &n14_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_n14_crystallized() {
+                    pm::N14_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::N14_EVAPORATION_SPEED
+                }
+            } else {
+                pm::N14_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_n14_crystallized(false);
+                    proton.clear_n14_crystal_bonds();
+                    proton.set_n14_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &n14_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.n14_freeze_cooldown() > 0.0 || !proton.is_n14_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_n14_crystallized(false);
+                        p.clear_n14_crystal_bonds();
+                        p.set_n14_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..n14_atoms.len() {
+            for j in (i + 1)..n14_atoms.len() {
+                let (idx1, pos1, _) = n14_atoms[i];
+                let (idx2, pos2, _) = n14_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::N14_MIN_SPACING && dist < pm::N14_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &n14_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.n14_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::N14_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(8.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_n14_crystallized(true);
+                    proton.set_n14_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_n14_crystallized(false);
+                    proton.clear_n14_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply bond forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &n14_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_n14_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.n14_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::N14_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::N14_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.charge() == 7 && proton.neutron_count() == 7 && proton.is_n14_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// P31 crystallization - phosphorus forms P₄ tetrahedral molecules
+    fn update_p31_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all P31 atoms =====
+        let mut p31_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 15 && proton.neutron_count() == 16 {
+                    p31_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &p31_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_p31_crystallized() {
+                    pm::P31_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::P31_EVAPORATION_SPEED
+                }
+            } else {
+                pm::P31_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_p31_crystallized(false);
+                    proton.clear_p31_crystal_bonds();
+                    proton.set_p31_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &p31_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.p31_freeze_cooldown() > 0.0 || !proton.is_p31_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_p31_crystallized(false);
+                        p.clear_p31_crystal_bonds();
+                        p.set_p31_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..p31_atoms.len() {
+            for j in (i + 1)..p31_atoms.len() {
+                let (idx1, pos1, _) = p31_atoms[i];
+                let (idx2, pos2, _) = p31_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::P31_MIN_SPACING && dist < pm::P31_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &p31_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.p31_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::P31_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(6.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_p31_crystallized(true);
+                    proton.set_p31_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_p31_crystallized(false);
+                    proton.clear_p31_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply bond forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &p31_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_p31_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.p31_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::P31_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::P31_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.charge() == 15 && proton.neutron_count() == 16 && proton.is_p31_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Na23 crystallization - sodium metal (soft alkali metal, body-centered cubic)
+    fn update_na23_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all Na23 atoms =====
+        let mut na23_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 11 && proton.neutron_count() == 12 {
+                    na23_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &na23_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_na23_crystallized() {
+                    pm::NA23_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::NA23_EVAPORATION_SPEED
+                }
+            } else {
+                pm::NA23_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_na23_crystallized(false);
+                    proton.clear_na23_crystal_bonds();
+                    proton.set_na23_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &na23_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.na23_freeze_cooldown() > 0.0 || !proton.is_na23_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_na23_crystallized(false);
+                        p.clear_na23_crystal_bonds();
+                        p.set_na23_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..na23_atoms.len() {
+            for j in (i + 1)..na23_atoms.len() {
+                let (idx1, pos1, _) = na23_atoms[i];
+                let (idx2, pos2, _) = na23_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::NA23_MIN_SPACING && dist < pm::NA23_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &na23_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.na23_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::NA23_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(8.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_na23_crystallized(true);
+                    proton.set_na23_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_na23_crystallized(false);
+                    proton.clear_na23_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply bond forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &na23_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_na23_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.na23_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::NA23_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::NA23_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.charge() == 11 && proton.neutron_count() == 12 && proton.is_na23_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// K39 crystallization - potassium metal (very soft alkali metal, body-centered cubic)
+    fn update_k39_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all K39 atoms =====
+        let mut k39_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 19 && proton.neutron_count() == 20 {
+                    k39_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &k39_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_k39_crystallized() {
+                    pm::K39_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::K39_EVAPORATION_SPEED
+                }
+            } else {
+                pm::K39_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_k39_crystallized(false);
+                    proton.clear_k39_crystal_bonds();
+                    proton.set_k39_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &k39_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.k39_freeze_cooldown() > 0.0 || !proton.is_k39_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_k39_crystallized(false);
+                        p.clear_k39_crystal_bonds();
+                        p.set_k39_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..k39_atoms.len() {
+            for j in (i + 1)..k39_atoms.len() {
+                let (idx1, pos1, _) = k39_atoms[i];
+                let (idx2, pos2, _) = k39_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::K39_MIN_SPACING && dist < pm::K39_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &k39_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.k39_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::K39_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(8.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_k39_crystallized(true);
+                    proton.set_k39_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_k39_crystallized(false);
+                    proton.clear_k39_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply bond forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &k39_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_k39_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.k39_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::K39_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::K39_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.charge() == 19 && proton.neutron_count() == 20 && proton.is_k39_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ca40 crystallization - calcium metal (alkaline earth metal, face-centered cubic)
+    fn update_ca40_crystallization(&mut self, delta_time: f32) {
+        // ===== PHASE 1: Collect all Ca40 atoms =====
+        let mut ca40_atoms: Vec<(usize, Vec2, Vec2)> = Vec::new();
+        for (i, proton_opt) in self.protons.iter().enumerate() {
+            if let Some(proton) = proton_opt {
+                if proton.is_alive() && proton.charge() == 20 && proton.neutron_count() == 20 {
+                    ca40_atoms.push((i, proton.position(), proton.velocity()));
+                }
+            }
+        }
+
+        // ===== PHASE 2: Check evaporation =====
+        for (idx, _, vel) in &ca40_atoms {
+            let speed = vel.length();
+            let evaporation_threshold = if let Some(proton) = &self.protons[*idx] {
+                if proton.is_ca40_crystallized() {
+                    pm::CA40_FROZEN_EVAPORATION_SPEED
+                } else {
+                    pm::CA40_EVAPORATION_SPEED
+                }
+            } else {
+                pm::CA40_EVAPORATION_SPEED
+            };
+
+            if speed > evaporation_threshold {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_ca40_crystallized(false);
+                    proton.clear_ca40_crystal_bonds();
+                    proton.set_ca40_crystal_group(None);
+                }
+            }
+        }
+
+        // ===== PHASE 3: Clear old bonds =====
+        for (idx, _, _) in &ca40_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.ca40_freeze_cooldown() > 0.0 || !proton.is_ca40_crystallized() {
+                    if let Some(p) = &mut self.protons[*idx] {
+                        p.set_ca40_crystallized(false);
+                        p.clear_ca40_crystal_bonds();
+                        p.set_ca40_crystal_group(None);
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 4: Form new bonds =====
+        let mut neighbor_lists: Vec<Vec<usize>> = vec![Vec::new(); self.protons.len()];
+        for i in 0..ca40_atoms.len() {
+            for j in (i + 1)..ca40_atoms.len() {
+                let (idx1, pos1, _) = ca40_atoms[i];
+                let (idx2, pos2, _) = ca40_atoms[j];
+                let dist = pos1.distance(pos2);
+
+                if dist >= pm::CA40_MIN_SPACING && dist < pm::CA40_NEIGHBOR_DISTANCE {
+                    neighbor_lists[idx1].push(idx2);
+                    neighbor_lists[idx2].push(idx1);
+                }
+            }
+        }
+
+        for (idx, _, _) in &ca40_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if proton.ca40_freeze_cooldown() > 0.0 {
+                    continue;
+                }
+            }
+
+            let neighbors = &neighbor_lists[*idx];
+            if neighbors.len() >= pm::CA40_MIN_NEIGHBORS {
+                let mut neighbors_with_dist: Vec<(usize, f32)> = neighbors
+                    .iter()
+                    .filter_map(|&n_idx| {
+                        if let Some(n_proton) = &self.protons[n_idx] {
+                            Some((n_idx, n_proton.position().distance(
+                                if let Some(p) = &self.protons[*idx] { p.position() } else { return None; }
+                            )))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                neighbors_with_dist.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let nearest: Vec<usize> = neighbors_with_dist
+                    .iter()
+                    .take(8.min(neighbors_with_dist.len()))
+                    .map(|(idx, _)| *idx)
+                    .collect();
+
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_ca40_crystallized(true);
+                    proton.set_ca40_crystal_bonds(nearest);
+                }
+            } else {
+                if let Some(proton) = &mut self.protons[*idx] {
+                    proton.set_ca40_crystallized(false);
+                    proton.clear_ca40_crystal_bonds();
+                }
+            }
+        }
+
+        // ===== PHASE 5: Apply bond forces =====
+        let mut forces: Vec<Vec2> = vec![Vec2::ZERO; self.protons.len()];
+        for (idx, pos, _) in &ca40_atoms {
+            if let Some(proton) = &self.protons[*idx] {
+                if !proton.is_ca40_crystallized() {
+                    continue;
+                }
+
+                for &bond_idx in proton.ca40_crystal_bonds() {
+                    if let Some(bonded) = &self.protons[bond_idx] {
+                        let delta = bonded.position() - *pos;
+                        let dist = delta.length();
+                        if dist > 0.1 {
+                            let radial_displacement = dist - pm::CA40_BOND_REST_LENGTH;
+                            let radial_force = (delta / dist) * (radial_displacement * pm::CA40_BOND_STRENGTH * 0.1);
+                            forces[bond_idx] += radial_force;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== PHASE 6: Apply forces =====
+        for (i, force) in forces.iter().enumerate() {
+            if let Some(proton) = &mut self.protons[i] {
+                if proton.is_alive() && proton.charge() == 20 && proton.neutron_count() == 20 && proton.is_ca40_crystallized() {
+                    let force_magnitude = force.length();
+                    if force_magnitude > 0.0001 {
+                        proton.add_velocity((*force / proton.mass()) * delta_time);
+                    }
+                }
             }
         }
     }

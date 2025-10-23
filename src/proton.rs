@@ -113,6 +113,53 @@ pub struct Proton {
     s32_crystal_bonds: Vec<usize>,
     s32_crystal_group: Option<usize>,
     s32_freeze_cooldown: f32,
+
+    // === BIOLOGICAL ELEMENTS ===
+
+    // Nitrogen-14 flag
+    is_nitrogen14: bool,
+
+    // Phosphorus-31 flag
+    is_phosphorus31: bool,
+
+    // Sodium-23 flag
+    is_sodium23: bool,
+
+    // Potassium-39 flag
+    is_potassium39: bool,
+
+    // Calcium-40 flag
+    is_calcium40: bool,
+
+    // N14 phase transitions
+    is_n14_crystallized: bool,
+    n14_crystal_bonds: Vec<usize>,
+    n14_crystal_group: Option<usize>,
+    n14_freeze_cooldown: f32,
+
+    // P31 phase transitions
+    is_p31_crystallized: bool,
+    p31_crystal_bonds: Vec<usize>,
+    p31_crystal_group: Option<usize>,
+    p31_freeze_cooldown: f32,
+
+    // Na23 phase transitions
+    is_na23_crystallized: bool,
+    na23_crystal_bonds: Vec<usize>,
+    na23_crystal_group: Option<usize>,
+    na23_freeze_cooldown: f32,
+
+    // K39 phase transitions
+    is_k39_crystallized: bool,
+    k39_crystal_bonds: Vec<usize>,
+    k39_crystal_group: Option<usize>,
+    k39_freeze_cooldown: f32,
+
+    // Ca40 phase transitions
+    is_ca40_crystallized: bool,
+    ca40_crystal_bonds: Vec<usize>,
+    ca40_crystal_group: Option<usize>,
+    ca40_freeze_cooldown: f32,
 }
 
 impl Proton {
@@ -193,6 +240,33 @@ impl Proton {
             s32_crystal_bonds: Vec::new(),
             s32_crystal_group: None,
             s32_freeze_cooldown: 0.0,
+            // Biological element flags
+            is_nitrogen14: false,
+            is_phosphorus31: false,
+            is_sodium23: false,
+            is_potassium39: false,
+            is_calcium40: false,
+            // Biological element phase transitions
+            is_n14_crystallized: false,
+            n14_crystal_bonds: Vec::new(),
+            n14_crystal_group: None,
+            n14_freeze_cooldown: 0.0,
+            is_p31_crystallized: false,
+            p31_crystal_bonds: Vec::new(),
+            p31_crystal_group: None,
+            p31_freeze_cooldown: 0.0,
+            is_na23_crystallized: false,
+            na23_crystal_bonds: Vec::new(),
+            na23_crystal_group: None,
+            na23_freeze_cooldown: 0.0,
+            is_k39_crystallized: false,
+            k39_crystal_bonds: Vec::new(),
+            k39_crystal_group: None,
+            k39_freeze_cooldown: 0.0,
+            is_ca40_crystallized: false,
+            ca40_crystal_bonds: Vec::new(),
+            ca40_crystal_group: None,
+            ca40_freeze_cooldown: 0.0,
         }
     }
 
@@ -386,7 +460,21 @@ impl Proton {
             "Ne20".to_string()
         } else if self.is_oxygen16_bonded {
             "O16".to_string()
-        } else if self.charge == 6 && self.neutron_count == 6 {
+        }
+        // Biological elements
+        else if self.is_nitrogen14 || (self.charge == 7 && self.neutron_count == 7) {
+            "N14".to_string()
+        } else if self.is_phosphorus31 || (self.charge == 15 && self.neutron_count == 16) {
+            "P31".to_string()
+        } else if self.is_sodium23 || (self.charge == 11 && self.neutron_count == 12) {
+            "Na23".to_string()
+        } else if self.is_potassium39 || (self.charge == 19 && self.neutron_count == 20) {
+            "K39".to_string()
+        } else if self.is_calcium40 || (self.charge == 20 && self.neutron_count == 20) {
+            "Ca40".to_string()
+        }
+        // Triple alpha and helium
+        else if self.charge == 6 && self.neutron_count == 6 {
             "C12".to_string()
         } else if self.charge == 2 && self.neutron_count == 2 {
             "He4".to_string()
@@ -483,6 +571,27 @@ impl Proton {
         else if self.is_oxygen16_bonded {
             render_color = Color::from_rgba(100, 180, 255, 255);
             // Keep original radius for bonded particles
+        }
+        // Biological elements
+        else if self.is_nitrogen14 || (self.charge == 7 && self.neutron_count == 7) {
+            render_color = Color::from_rgba(50, 150, 200, 255);  // Light blue
+            render_radius *= pc::NITROGEN14_RADIUS_MULTIPLIER;
+        }
+        else if self.is_phosphorus31 || (self.charge == 15 && self.neutron_count == 16) {
+            render_color = Color::from_rgba(220, 100, 100, 255);  // Reddish
+            render_radius *= pc::PHOSPHORUS31_RADIUS_MULTIPLIER;
+        }
+        else if self.is_sodium23 || (self.charge == 11 && self.neutron_count == 12) {
+            render_color = Color::from_rgba(255, 150, 100, 255);  // Orange
+            render_radius *= pc::SODIUM23_RADIUS_MULTIPLIER;
+        }
+        else if self.is_potassium39 || (self.charge == 19 && self.neutron_count == 20) {
+            render_color = Color::from_rgba(100, 200, 150, 255);  // Teal
+            render_radius *= pc::POTASSIUM39_RADIUS_MULTIPLIER;
+        }
+        else if self.is_calcium40 || (self.charge == 20 && self.neutron_count == 20) {
+            render_color = Color::from_rgba(200, 220, 180, 255);  // Light gray-green
+            render_radius *= pc::CALCIUM40_RADIUS_MULTIPLIER;
         }
         // Carbon-12
         else if self.charge == 6 && self.neutron_count == 6 {
@@ -666,6 +775,63 @@ impl Proton {
     pub fn set_s32_crystal_group(&mut self, group: Option<usize>) { self.s32_crystal_group = group; }
     pub fn s32_freeze_cooldown(&self) -> f32 { self.s32_freeze_cooldown }
     pub fn set_s32_freeze_cooldown(&mut self, cooldown: f32) { self.s32_freeze_cooldown = cooldown; }
+
+    // === BIOLOGICAL ELEMENTS GETTERS/SETTERS ===
+
+    // N14 crystallization getters/setters
+    pub fn is_n14_crystallized(&self) -> bool { self.is_n14_crystallized }
+    pub fn set_n14_crystallized(&mut self, crystallized: bool) { self.is_n14_crystallized = crystallized; }
+    pub fn n14_crystal_bonds(&self) -> &Vec<usize> { &self.n14_crystal_bonds }
+    pub fn set_n14_crystal_bonds(&mut self, bonds: Vec<usize>) { self.n14_crystal_bonds = bonds; }
+    pub fn clear_n14_crystal_bonds(&mut self) { self.n14_crystal_bonds.clear(); }
+    pub fn n14_crystal_group(&self) -> Option<usize> { self.n14_crystal_group }
+    pub fn set_n14_crystal_group(&mut self, group: Option<usize>) { self.n14_crystal_group = group; }
+    pub fn n14_freeze_cooldown(&self) -> f32 { self.n14_freeze_cooldown }
+    pub fn set_n14_freeze_cooldown(&mut self, cooldown: f32) { self.n14_freeze_cooldown = cooldown; }
+
+    // P31 crystallization getters/setters
+    pub fn is_p31_crystallized(&self) -> bool { self.is_p31_crystallized }
+    pub fn set_p31_crystallized(&mut self, crystallized: bool) { self.is_p31_crystallized = crystallized; }
+    pub fn p31_crystal_bonds(&self) -> &Vec<usize> { &self.p31_crystal_bonds }
+    pub fn set_p31_crystal_bonds(&mut self, bonds: Vec<usize>) { self.p31_crystal_bonds = bonds; }
+    pub fn clear_p31_crystal_bonds(&mut self) { self.p31_crystal_bonds.clear(); }
+    pub fn p31_crystal_group(&self) -> Option<usize> { self.p31_crystal_group }
+    pub fn set_p31_crystal_group(&mut self, group: Option<usize>) { self.p31_crystal_group = group; }
+    pub fn p31_freeze_cooldown(&self) -> f32 { self.p31_freeze_cooldown }
+    pub fn set_p31_freeze_cooldown(&mut self, cooldown: f32) { self.p31_freeze_cooldown = cooldown; }
+
+    // Na23 crystallization getters/setters
+    pub fn is_na23_crystallized(&self) -> bool { self.is_na23_crystallized }
+    pub fn set_na23_crystallized(&mut self, crystallized: bool) { self.is_na23_crystallized = crystallized; }
+    pub fn na23_crystal_bonds(&self) -> &Vec<usize> { &self.na23_crystal_bonds }
+    pub fn set_na23_crystal_bonds(&mut self, bonds: Vec<usize>) { self.na23_crystal_bonds = bonds; }
+    pub fn clear_na23_crystal_bonds(&mut self) { self.na23_crystal_bonds.clear(); }
+    pub fn na23_crystal_group(&self) -> Option<usize> { self.na23_crystal_group }
+    pub fn set_na23_crystal_group(&mut self, group: Option<usize>) { self.na23_crystal_group = group; }
+    pub fn na23_freeze_cooldown(&self) -> f32 { self.na23_freeze_cooldown }
+    pub fn set_na23_freeze_cooldown(&mut self, cooldown: f32) { self.na23_freeze_cooldown = cooldown; }
+
+    // K39 crystallization getters/setters
+    pub fn is_k39_crystallized(&self) -> bool { self.is_k39_crystallized }
+    pub fn set_k39_crystallized(&mut self, crystallized: bool) { self.is_k39_crystallized = crystallized; }
+    pub fn k39_crystal_bonds(&self) -> &Vec<usize> { &self.k39_crystal_bonds }
+    pub fn set_k39_crystal_bonds(&mut self, bonds: Vec<usize>) { self.k39_crystal_bonds = bonds; }
+    pub fn clear_k39_crystal_bonds(&mut self) { self.k39_crystal_bonds.clear(); }
+    pub fn k39_crystal_group(&self) -> Option<usize> { self.k39_crystal_group }
+    pub fn set_k39_crystal_group(&mut self, group: Option<usize>) { self.k39_crystal_group = group; }
+    pub fn k39_freeze_cooldown(&self) -> f32 { self.k39_freeze_cooldown }
+    pub fn set_k39_freeze_cooldown(&mut self, cooldown: f32) { self.k39_freeze_cooldown = cooldown; }
+
+    // Ca40 crystallization getters/setters
+    pub fn is_ca40_crystallized(&self) -> bool { self.is_ca40_crystallized }
+    pub fn set_ca40_crystallized(&mut self, crystallized: bool) { self.is_ca40_crystallized = crystallized; }
+    pub fn ca40_crystal_bonds(&self) -> &Vec<usize> { &self.ca40_crystal_bonds }
+    pub fn set_ca40_crystal_bonds(&mut self, bonds: Vec<usize>) { self.ca40_crystal_bonds = bonds; }
+    pub fn clear_ca40_crystal_bonds(&mut self) { self.ca40_crystal_bonds.clear(); }
+    pub fn ca40_crystal_group(&self) -> Option<usize> { self.ca40_crystal_group }
+    pub fn set_ca40_crystal_group(&mut self, group: Option<usize>) { self.ca40_crystal_group = group; }
+    pub fn ca40_freeze_cooldown(&self) -> f32 { self.ca40_freeze_cooldown }
+    pub fn set_ca40_freeze_cooldown(&mut self, cooldown: f32) { self.ca40_freeze_cooldown = cooldown; }
 
     // Oxygen-16 bonding getters/setters
     pub fn is_oxygen16_bonded(&self) -> bool { self.is_oxygen16_bonded }

@@ -125,6 +125,33 @@ pub mod proton {
     pub const SULFUR32_RADIUS_MULTIPLIER: f32 = 3.4;
     pub const SULFUR32_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.72;
 
+    // === BIOLOGICAL ELEMENTS ===
+
+    // Nitrogen-14 (essential for proteins, DNA/RNA)
+    pub const NITROGEN14_COLOR: (u8, u8, u8) = (50, 150, 200);  // Light blue
+    pub const NITROGEN14_RADIUS_MULTIPLIER: f32 = 2.2;
+    pub const NITROGEN14_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.65;
+
+    // Phosphorus-31 (ATP energy, DNA/RNA, membranes)
+    pub const PHOSPHORUS31_COLOR: (u8, u8, u8) = (220, 100, 100);  // Reddish
+    pub const PHOSPHORUS31_RADIUS_MULTIPLIER: f32 = 2.8;
+    pub const PHOSPHORUS31_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.68;
+
+    // Sodium-23 (cell balance)
+    pub const SODIUM23_COLOR: (u8, u8, u8) = (255, 150, 100);  // Orange
+    pub const SODIUM23_RADIUS_MULTIPLIER: f32 = 2.3;
+    pub const SODIUM23_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.63;
+
+    // Potassium-39 (cell signals)
+    pub const POTASSIUM39_COLOR: (u8, u8, u8) = (100, 200, 150);  // Teal
+    pub const POTASSIUM39_RADIUS_MULTIPLIER: f32 = 3.0;
+    pub const POTASSIUM39_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.66;
+
+    // Calcium-40 (structure)
+    pub const CALCIUM40_COLOR: (u8, u8, u8) = (200, 220, 180);  // Light gray-green
+    pub const CALCIUM40_RADIUS_MULTIPLIER: f32 = 3.2;
+    pub const CALCIUM40_CAPTURE_VELOCITY_THRESHOLD: f32 = 0.69;
+
     // Hydrogen Sulfide (H2S) - S32 + 2H
     pub const H2S_COLOR: (u8, u8, u8) = (200, 220, 80);  // Yellow-green
     pub const H2S_RADIUS_MULTIPLIER: f32 = 3.2;
@@ -315,6 +342,67 @@ pub mod proton_manager {
     pub const S32_RING_ANGLE_IDEAL: f32 = 1.8326; // ~105 degrees - internal angle of S₈ crown
     pub const S32_RING_ANGLE_TOLERANCE: f32 = 0.7; // ~40 degrees - rings are flexible
     pub const S32_RING_ALIGNMENT_STRENGTH: f32 = 3.5; // Moderate - maintain ring shape
+
+    // === BIOLOGICAL ELEMENT CRYSTALLIZATION ===
+
+    // N14 crystallization (nitrogen - forms N₂ diatomic molecules and weak van der Waals crystals)
+    pub const N14_NEIGHBOR_DISTANCE: f32 = 85.0;
+    pub const N14_MIN_SPACING: f32 = 42.0;
+    pub const N14_BOND_STRENGTH: f32 = 55.0; // Strong triple bonds in N₂, weak between molecules
+    pub const N14_BOND_REST_LENGTH: f32 = 58.0;
+    pub const N14_EVAPORATION_SPEED: f32 = 40.0; // Low - nitrogen evaporates easily
+    pub const N14_FROZEN_EVAPORATION_SPEED: f32 = 90.0;
+    pub const N14_FREEZE_COOLDOWN: f32 = 9.0;
+    pub const N14_MIN_NEIGHBORS: usize = 3; // Forms diatomic pairs then clusters
+
+    // P31 crystallization (phosphorus - forms P₄ tetrahedral molecules, white phosphorus)
+    pub const P31_NEIGHBOR_DISTANCE: f32 = 90.0;
+    pub const P31_MIN_SPACING: f32 = 45.0;
+    pub const P31_BOND_STRENGTH: f32 = 60.0; // Moderate covalent in P₄
+    pub const P31_BOND_REST_LENGTH: f32 = 62.0;
+    pub const P31_EVAPORATION_SPEED: f32 = 70.0;
+    pub const P31_FROZEN_EVAPORATION_SPEED: f32 = 160.0;
+    pub const P31_FREEZE_COOLDOWN: f32 = 10.0;
+    pub const P31_MIN_NEIGHBORS: usize = 3; // Forms P₄ tetrahedral clusters
+
+    // Na23 crystallization (sodium - soft alkali metal, body-centered cubic)
+    pub const NA23_NEIGHBOR_DISTANCE: f32 = 95.0;
+    pub const NA23_MIN_SPACING: f32 = 47.0;
+    pub const NA23_BOND_STRENGTH: f32 = 25.0; // Weak metallic - very soft metal
+    pub const NA23_BOND_REST_LENGTH: f32 = 65.0;
+    pub const NA23_EVAPORATION_SPEED: f32 = 50.0; // Low - melts and evaporates easily
+    pub const NA23_FROZEN_EVAPORATION_SPEED: f32 = 110.0;
+    pub const NA23_FREEZE_COOLDOWN: f32 = 7.0;
+    pub const NA23_MIN_NEIGHBORS: usize = 4; // Body-centered cubic (flexible coordination)
+    pub const NA23_ANGLE_SPACING: f32 = 1.5708; // 90 degrees (BCC approximation)
+    pub const NA23_ANGLE_TOLERANCE: f32 = 0.9; // ~50 degrees - very flexible metallic
+    pub const NA23_ALIGNMENT_STRENGTH: f32 = 1.5; // Very weak - soft metal
+
+    // K39 crystallization (potassium - very soft alkali metal, body-centered cubic)
+    pub const K39_NEIGHBOR_DISTANCE: f32 = 105.0; // Larger atom
+    pub const K39_MIN_SPACING: f32 = 52.0;
+    pub const K39_BOND_STRENGTH: f32 = 20.0; // Even weaker than sodium - softest metal
+    pub const K39_BOND_REST_LENGTH: f32 = 72.0;
+    pub const K39_EVAPORATION_SPEED: f32 = 45.0; // Very low - extremely reactive/volatile
+    pub const K39_FROZEN_EVAPORATION_SPEED: f32 = 100.0;
+    pub const K39_FREEZE_COOLDOWN: f32 = 6.0;
+    pub const K39_MIN_NEIGHBORS: usize = 4; // Body-centered cubic
+    pub const K39_ANGLE_SPACING: f32 = 1.5708; // 90 degrees (BCC)
+    pub const K39_ANGLE_TOLERANCE: f32 = 1.0; // ~57 degrees - extremely flexible
+    pub const K39_ALIGNMENT_STRENGTH: f32 = 1.0; // Ultra-weak - very soft metal
+
+    // Ca40 crystallization (calcium - alkaline earth metal, face-centered cubic)
+    pub const CA40_NEIGHBOR_DISTANCE: f32 = 100.0;
+    pub const CA40_MIN_SPACING: f32 = 50.0;
+    pub const CA40_BOND_STRENGTH: f32 = 35.0; // Moderate metallic - harder than alkali metals
+    pub const CA40_BOND_REST_LENGTH: f32 = 68.0;
+    pub const CA40_EVAPORATION_SPEED: f32 = 80.0; // Moderate - more stable than Na/K
+    pub const CA40_FROZEN_EVAPORATION_SPEED: f32 = 180.0;
+    pub const CA40_FREEZE_COOLDOWN: f32 = 9.0;
+    pub const CA40_MIN_NEIGHBORS: usize = 4; // Face-centered cubic
+    pub const CA40_ANGLE_SPACING: f32 = 1.0472; // 60 degrees (FCC hexagonal)
+    pub const CA40_ANGLE_TOLERANCE: f32 = 0.7; // ~40 degrees - moderately flexible
+    pub const CA40_ALIGNMENT_STRENGTH: f32 = 2.0; // Moderate metallic
 }
 
 // ===== ATOM PHYSICS =====
