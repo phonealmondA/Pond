@@ -32,11 +32,11 @@ pub const HEAD_ZONE_BORDER_WIDTH: f32 = 1.0;  // Line width for head zone border
 
 pub const INNER_MEMBRANE_RADIUS: f32 = 100.0;
 pub const OUTER_MEMBRANE_RADIUS: f32 = 110.0;  // 5x closer to inner membrane (was 125.0)
-pub const NUM_MEMBRANE_COMPONENTS: usize = 60;  // Number of lipid components in each membrane layer
+pub const NUM_MEMBRANE_COMPONENTS: usize = 80;  // Number of lipid components in each membrane layer
 
 // Ideal spacing between neighbors - calculated based on circumference / component count
-pub const INNER_DESIRED_NEIGHBOR_DISTANCE: f32 = 6.28;
-pub const OUTER_DESIRED_NEIGHBOR_DISTANCE: f32 = 6.41;
+pub const INNER_DESIRED_NEIGHBOR_DISTANCE: f32 = 3.28;
+pub const OUTER_DESIRED_NEIGHBOR_DISTANCE: f32 = 3.41;
 
 // =============================================================================
 // HEAD/CORE PHYSICS

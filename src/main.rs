@@ -15,7 +15,16 @@ use macroquad::prelude::*;
 use ring::RingManager;
 use atom::AtomManager;
 use proton_manager::ProtonManager;
+use cell::Cell;
+use cell_constants as cc;
 use std::collections::HashSet;
+
+// Game Mode
+#[derive(PartialEq)]
+enum GameMode {
+    Normal,
+    Cell,
+}
 
 // UI State structures
 #[derive(PartialEq)]
@@ -329,6 +338,10 @@ async fn main() {
     let mut fps = 0.0;
     let mut paused = false;
 
+    // Game mode
+    let mut game_mode = GameMode::Normal;
+    let mut cell: Option<Cell> = None;
+
     // UI State
     let mut menu_state = MenuState::None;
     let mut discovered_elements: HashSet<ElementType> = HashSet::new();
@@ -341,6 +354,7 @@ async fn main() {
     // Create buttons
     let elements_button = Button::new(10.0, 10.0, 120.0, 40.0, "Elements");
     let controls_button = Button::new(0.0, 10.0, 120.0, 40.0, "Controls"); // x will be set in loop
+    let cell_button = Button::new(0.0, 0.0, 120.0, 40.0, "Cell"); // Will be positioned at bottom left
 
     // Create color slider (positioned at bottom, will be updated each frame)
     let mut color_slider = ColorSlider::new(0.0, 0.0, 0.0, 30.0, constants::COLOR_PALETTE_SIZE);
@@ -352,6 +366,11 @@ async fn main() {
         // Update controls button position (top right)
         let mut controls_button_positioned = controls_button.clone();
         controls_button_positioned.x = window_size.0 - controls_button.width - 10.0;
+
+        // Update cell button position (bottom left)
+        let mut cell_button_positioned = cell_button.clone();
+        cell_button_positioned.x = 10.0;
+        cell_button_positioned.y = window_size.1 - cell_button.height - 10.0;
 
         // Update color slider position (centered at bottom)
         let slider_width = 600.0;
@@ -393,65 +412,85 @@ async fn main() {
             }
         }
 
-        // Update systems (only if not paused)
-        if !paused {
-            ring_manager.update(delta_time, window_size);
-            atom_manager.update(delta_time, ring_manager.get_all_rings(), window_size);
-            proton_manager.update(delta_time, window_size, &mut atom_manager, &mut ring_manager);
-        }
+        // Update systems based on game mode
+        match game_mode {
+            GameMode::Normal => {
+                // Update systems (only if not paused)
+                if !paused {
+                    ring_manager.update(delta_time, window_size);
+                    atom_manager.update(delta_time, ring_manager.get_all_rings(), window_size);
+                    proton_manager.update(delta_time, window_size, &mut atom_manager, &mut ring_manager);
+                }
 
-        // Render
-        clear_background(BLACK);
+                // Render
+                clear_background(BLACK);
 
-        // Draw everything
-        ring_manager.draw(18);
-        // atom_manager.draw(12);  // Atoms are hidden - only used for backend calculations
-        proton_manager.draw(24);
-        proton_manager.draw_labels();
+                // Draw everything
+                ring_manager.draw(18);
+                // atom_manager.draw(12);  // Atoms are hidden - only used for backend calculations
+                proton_manager.draw(24);
+                proton_manager.draw_labels();
 
-        // Draw UI - buttons and menus
+                // Draw UI - buttons and menus
 
-        // Draw buttons (always visible)
-        elements_button.draw();
-        controls_button_positioned.draw();
+                // Draw buttons (always visible)
+                elements_button.draw();
+                controls_button_positioned.draw();
+                cell_button_positioned.draw();
 
-        // Draw color slider (always visible)
-        color_slider.draw(ring_manager.get_current_color_index(), &constants::RING_COLORS);
+                // Draw color slider (always visible)
+                color_slider.draw(ring_manager.get_current_color_index(), &constants::RING_COLORS);
 
-        // Draw selected element indicator
-        if let Some(elem) = selected_element {
-            let text = format!("Selected: {}", elem.name());
-            let text_dims = measure_text(&text, None, 24, 1.0);
-            let text_x = (window_size.0 - text_dims.width) / 2.0;
-            draw_rectangle(text_x - 10.0, 10.0, text_dims.width + 20.0, 40.0, Color::from_rgba(30, 30, 30, 200));
-            draw_text(&text, text_x, 35.0, 24.0, elem.color());
-        }
+                // Draw selected element indicator
+                if let Some(elem) = selected_element {
+                    let text = format!("Selected: {}", elem.name());
+                    let text_dims = measure_text(&text, None, 24, 1.0);
+                    let text_x = (window_size.0 - text_dims.width) / 2.0;
+                    draw_rectangle(text_x - 10.0, 10.0, text_dims.width + 20.0, 40.0, Color::from_rgba(30, 30, 30, 200));
+                    draw_text(&text, text_x, 35.0, 24.0, elem.color());
+                }
 
-        // Draw menus
-        match menu_state {
-            MenuState::Elements => {
-                draw_elements_menu(&discovered_elements, &element_counts, window_size);
+                // Draw menus
+                match menu_state {
+                    MenuState::Elements => {
+                        draw_elements_menu(&discovered_elements, &element_counts, window_size);
+                    },
+                    MenuState::Controls => {
+                        draw_controls_menu(fps, &ring_manager, &atom_manager, &proton_manager, window_size, &ring_manager.get_current_frequency_info());
+                    },
+                    MenuState::None => {},
+                }
+
+                // Show PAUSED indicator
+                if paused {
+                    let pause_text = "PAUSED";
+                    let pause_font_size = 60.0;
+                    let text_dims = measure_text(pause_text, None, pause_font_size as u16, 1.0);
+                    let pause_x = (window_size.0 - text_dims.width) / 2.0;
+                    let pause_y = window_size.1 / 2.0;
+
+                    // Draw with red outline
+                    draw_text(pause_text, pause_x + 2.0, pause_y + 2.0, pause_font_size, BLACK);
+                    draw_text(pause_text, pause_x - 2.0, pause_y - 2.0, pause_font_size, BLACK);
+                    draw_text(pause_text, pause_x + 2.0, pause_y - 2.0, pause_font_size, BLACK);
+                    draw_text(pause_text, pause_x - 2.0, pause_y + 2.0, pause_font_size, BLACK);
+                    draw_text(pause_text, pause_x, pause_y, pause_font_size, RED);
+                }
             },
-            MenuState::Controls => {
-                draw_controls_menu(fps, &ring_manager, &atom_manager, &proton_manager, window_size, &ring_manager.get_current_frequency_info());
+            GameMode::Cell => {
+                // Cell mode - simple black background with cell
+                clear_background(BLACK);
+
+                // Handle cell movement with WASD
+                if let Some(ref mut cell_instance) = cell {
+                    cell_instance.handle_movement();
+                    cell_instance.update(delta_time);
+                    cell_instance.draw();
+                }
+
+                // Draw cell button to allow return to normal mode
+                cell_button_positioned.draw();
             },
-            MenuState::None => {},
-        }
-
-        // Show PAUSED indicator
-        if paused {
-            let pause_text = "PAUSED";
-            let pause_font_size = 60.0;
-            let text_dims = measure_text(pause_text, None, pause_font_size as u16, 1.0);
-            let pause_x = (window_size.0 - text_dims.width) / 2.0;
-            let pause_y = window_size.1 / 2.0;
-
-            // Draw with red outline
-            draw_text(pause_text, pause_x + 2.0, pause_y + 2.0, pause_font_size, BLACK);
-            draw_text(pause_text, pause_x - 2.0, pause_y - 2.0, pause_font_size, BLACK);
-            draw_text(pause_text, pause_x + 2.0, pause_y - 2.0, pause_font_size, BLACK);
-            draw_text(pause_text, pause_x - 2.0, pause_y + 2.0, pause_font_size, BLACK);
-            draw_text(pause_text, pause_x, pause_y, pause_font_size, RED);
         }
 
         // Input handling
@@ -469,18 +508,35 @@ async fn main() {
 
         // Left click handling
         if is_mouse_button_pressed(MouseButton::Left) {
-            match menu_state {
-                MenuState::None => {
-                    // Check button clicks
-                    if elements_button.contains_point(mouse_pos.0, mouse_pos.1) {
-                        menu_state = MenuState::Elements;
-                    } else if controls_button_positioned.contains_point(mouse_pos.0, mouse_pos.1) {
-                        menu_state = MenuState::Controls;
-                    } else if !paused {
-                        // Spawn ring if not clicking UI
-                        ring_manager.add_ring(vec2(mouse_pos.0, mouse_pos.1));
-                    }
-                },
+            // Handle cell button click (works in both modes)
+            if cell_button_positioned.contains_point(mouse_pos.0, mouse_pos.1) {
+                if game_mode == GameMode::Normal {
+                    // Switch to cell mode - create cell at screen center
+                    let center = vec2(window_size.0 / 2.0, window_size.1 / 2.0);
+                    cell = Some(Cell::new(center, cc::NUM_MEMBRANE_COMPONENTS));
+                    game_mode = GameMode::Cell;
+                    menu_state = MenuState::None; // Close any open menus
+                } else {
+                    // Switch back to normal mode
+                    game_mode = GameMode::Normal;
+                    cell = None;
+                }
+            } else {
+                match menu_state {
+                    MenuState::None => {
+                        // Only handle normal mode buttons when in normal mode
+                        if game_mode == GameMode::Normal {
+                            // Check button clicks
+                            if elements_button.contains_point(mouse_pos.0, mouse_pos.1) {
+                                menu_state = MenuState::Elements;
+                            } else if controls_button_positioned.contains_point(mouse_pos.0, mouse_pos.1) {
+                                menu_state = MenuState::Controls;
+                            } else if !paused {
+                                // Spawn ring if not clicking UI
+                                ring_manager.add_ring(vec2(mouse_pos.0, mouse_pos.1));
+                            }
+                        }
+                    },
                 MenuState::Elements => {
                     // Check if clicking an element in the menu
                     let menu_width = 500.0;
@@ -533,11 +589,12 @@ async fn main() {
                         menu_state = MenuState::None;
                     }
                 },
+                }
             }
         }
 
-        // Right click drag for element spawning (only when not paused and element is selected)
-        if !paused && selected_element.is_some() && menu_state == MenuState::None {
+        // Right click drag for element spawning (only in Normal mode when not paused and element is selected)
+        if game_mode == GameMode::Normal && !paused && selected_element.is_some() && menu_state == MenuState::None {
             if is_mouse_button_pressed(MouseButton::Right) {
                 right_click_start = Some(vec2(mouse_pos.0, mouse_pos.1));
                 is_dragging_right = true;
@@ -566,8 +623,8 @@ async fn main() {
             }
         }
 
-        // Color slider interaction
-        if menu_state == MenuState::None {
+        // Color slider interaction (only in Normal mode)
+        if game_mode == GameMode::Normal && menu_state == MenuState::None {
             // Start dragging slider
             if is_mouse_button_pressed(MouseButton::Left) && color_slider.contains_point(mouse_pos.0, mouse_pos.1) {
                 color_slider.is_dragging = true;
