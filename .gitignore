@@ -32,3 +32,6 @@ desktop.ini
 # Documentation builds (if generated)
 book/
 docs/_build/
+
+ROADMAP_TO_CELLS.md
+README.md
